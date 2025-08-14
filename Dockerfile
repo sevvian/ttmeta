@@ -38,10 +38,9 @@ RUN mkdir -p /app/data /app/logs /models && \
 # Copy pre-built wheels from the builder stage
 COPY --from=builder /wheels /wheels
 
-# Install the wheels
-# --no-index prevents pip from accessing PyPI
-# --find-links tells pip to look in the /wheels directory
-RUN pip install --no-cache-dir --no-index --find-links=/wheels -r /wheels/requirements.txt && \
+# --- THIS IS THE CORRECTED LINE ---
+# Install all the .whl files from the /wheels directory directly.
+RUN pip install --no-cache-dir --no-index --find-links=/wheels /wheels/*.whl && \
     rm -rf /wheels
 
 # Copy the application code
