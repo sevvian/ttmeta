@@ -13,7 +13,6 @@ WORKDIR /app
 
 # Set CMAKE_ARGS to compile for a baseline CPU without AVX support.
 # This ensures compatibility with older/low-power CPUs.
-# For modern CPUs with AVX2, you can remove this ENV line.
 ENV CMAKE_ARGS="-DGGML_CPU_F16=OFF -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_AVX512=OFF -DGGML_FMA=OFF"
 ENV FORCE_CMAKE=1
 
@@ -22,11 +21,18 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip wheel
 RUN pip wheel --no-cache-dir --wheel-dir=/wheels -r requirements.txt
 
+
 # Stage 2: Final Image
 # This stage uses the pre-built wheels for a lean final image.
 FROM python:3.11-slim
 
 WORKDIR /app
+
+# --- THIS IS THE NEW STEP THAT FIXES THE ERROR ---
+# Install the OpenMP runtime library, which is a dependency for llama.cpp
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user
 RUN groupadd -r appuser && useradd -r -g appuser appuser
@@ -38,7 +44,6 @@ RUN mkdir -p /app/data /app/logs /models && \
 # Copy pre-built wheels from the builder stage
 COPY --from=builder /wheels /wheels
 
-# --- THIS IS THE CORRECTED LINE ---
 # Install all the .whl files from the /wheels directory directly.
 RUN pip install --no-cache-dir --no-index --find-links=/wheels /wheels/*.whl && \
     rm -rf /wheels
