@@ -45,7 +45,7 @@ COPY ./app ./app
 
 # --- THIS IS THE MISSING LINE ---
 # Copy your test script into the container's working directory (/app)
-COPY test_llm.py .
+#COPY test_llm.py .
 # --- END OF FIX ---
 
 # Create non-root user and set permissions for ALL copied files
@@ -62,4 +62,4 @@ EXPOSE 8000
 #CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 # SET the new command to run our health check script
-CMD ["python", "-u", "test_llm.py"]
+CMD ["python", "-u", "app/test_llm.py"]
