@@ -1,0 +1,40 @@
+.
+├── .env.example
+├── Dockerfile
+├── Makefile
+├── README.md
+├── app
+│   ├── __init__.py
+│   ├── config.py
+│   ├── db.py
+│   ├── logging_conf.py
+│   ├── main.py
+│   ├── parser_llm.py
+│   ├── parser_regex.py
+│   ├── routes.py
+│   ├── schemas.py
+│   ├── static
+│   │   └── favicon.ico
+│   └── templates
+│       └── index.html
+├── data
+│   └── .gitkeep
+├── docker-compose.yml
+├── logs
+│   └── .gitkeep
+├── models
+│   └── .gitkeep
+├── requirements.txt
+└── tests
+    ├── __init__.py
+    ├── data
+    │   ├── expected
+    │   │   ├── sample1.json
+    │   │   ├── sample2.json
+    │   │   ├── sample3.json
+    │   │   ├── sample4.json
+    │   │   ├── sample5.json
+    │   │   └── sample6.json
+    │   └── samples.txt
+    ├── test_api.py
+    └── test_parsing.py
