@@ -54,4 +54,7 @@ USER appuser
 # Step 4: Expose port & set default command
 # -----------------------------------------------------------------------------
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+#CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# SET the new command to run our health check script
+CMD ["python", "-u", "test_llm.py"]
