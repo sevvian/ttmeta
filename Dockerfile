@@ -1,9 +1,7 @@
-# --- SINGLE-STAGE DEBUGGING DOCKERFILE ---
+# --- SINGLE-STAGE N5105-SAFE DOCKERFILE ---
 FROM python:3.11-slim
 
-# Install build-time AND runtime dependencies together.
-# build-essential & cmake are for compiling from source.
-# libgomp1 is the runtime dependency for llama.cpp.
+# Install build-time and runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
@@ -13,8 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # -----------------------------------------------------------------------------
-# CRITICAL: Set CMake arguments for Intel N5105 (Jasper Lake)
-# This enables AVX2/AVX/FMA (which your CPU supports) and disables AVX512 (unsupported).
+# CMake args tuned for Intel N5105 (Jasper Lake)
+# AVX2, AVX, FMA enabled (fast), AVX512 disabled (avoids SIGILL / exit 132)
 # -----------------------------------------------------------------------------
 ENV CMAKE_ARGS="-DLLAMA_NATIVE=OFF \
                 -DLLAMA_AVX2=ON \
@@ -25,36 +23,35 @@ ENV CMAKE_ARGS="-DLLAMA_NATIVE=OFF \
                 -DLLAMA_SSE4=ON"
 ENV FORCE_CMAKE=1
 
-# Copy requirements file first for layer caching
-COPY requirements.txt .
-
 # -----------------------------------------------------------------------------
-# Install dependencies with controlled build flags.
-# We force llama-cpp-python to build from source with the CPU-safe CMake flags.
+# Step 1: Build llama-cpp-python FIRST from source to lock in correct CPU flags
 # -----------------------------------------------------------------------------
 RUN pip install --no-cache-dir -v \
-    --no-binary llama-cpp-python \
-    --no-binary uvicorn \
+    --no-binary=llama-cpp-python \
+    llama-cpp-python==0.2.79
+
+# -----------------------------------------------------------------------------
+# Step 2: Install the rest of the dependencies (excluding llama-cpp-python wheel)
+# -----------------------------------------------------------------------------
+COPY requirements.txt .
+RUN pip install --no-cache-dir -v \
+    --no-binary=llama-cpp-python \
     -r requirements.txt
 
-# --- The rest of the Dockerfile is for setting up the runtime environment ---
-
-# Create a non-root user and group for security.
-RUN groupadd -r appuser && useradd -r -g appuser appuser
-
-# Create necessary directories and set their ownership.
-RUN mkdir -p /app/data /app/logs /models && \
-    chown -R appuser:appuser /app/data /app/logs /models
-
-# Copy the application code into the image.
+# -----------------------------------------------------------------------------
+# Step 3: Copy application code
+# -----------------------------------------------------------------------------
 COPY ./app ./app
-RUN chown -R appuser:appuser /app
 
-# Switch to the non-root user for running the application.
+# Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser appuser \
+    && mkdir -p /app/data /app/logs /models \
+    && chown -R appuser:appuser /app
+
 USER appuser
 
-# Expose the port the application will run on.
+# -----------------------------------------------------------------------------
+# Step 4: Expose port & set default command
+# -----------------------------------------------------------------------------
 EXPOSE 8000
-
-# Default command to run the application.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
