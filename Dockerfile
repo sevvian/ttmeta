@@ -39,11 +39,16 @@ RUN pip install --no-cache-dir -v \
     -r requirements.txt
 
 # -----------------------------------------------------------------------------
-# Step 3: Copy application code
+# Step 3: Copy application code AND the test script
 # -----------------------------------------------------------------------------
 COPY ./app ./app
 
-# Create non-root user
+# --- THIS IS THE MISSING LINE ---
+# Copy your test script into the container's working directory (/app)
+COPY test_llm.py .
+# --- END OF FIX ---
+
+# Create non-root user and set permissions for ALL copied files
 RUN groupadd -r appuser && useradd -r -g appuser appuser \
     && mkdir -p /app/data /app/logs /models \
     && chown -R appuser:appuser /app
