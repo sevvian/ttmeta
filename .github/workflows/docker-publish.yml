@@ -1,27 +1,21 @@
 name: Docker Build and Publish to GHCR
 
-# Controls when the action will run.
-# - Triggers on pushes to the 'main' branch.
-# - Allows manual triggering from the Actions tab on GitHub.
 on:
   push:
     branches:
       - main
   workflow_dispatch:
 
-# Environment variables available to all jobs in the workflow
 env:
-  # The GitHub Container Registry to push to
   REGISTRY: ghcr.io
-  # The name of the Docker image, using the repository name
-  IMAGE_NAME: ${{ github.repository }}
+  # It's best practice to have the image name be lowercase
+  IMAGE_NAME: ${{ github.repository_owner }}/${{ github.event.repository.name }}
 
 jobs:
   build-and-push:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
 
-    # Set permissions for the GITHUB_TOKEN for authentication with the container registry
     permissions:
       contents: read
       packages: write
@@ -37,15 +31,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # --- THIS IS THE NEW STEP THAT FIXES THE ERROR ---
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        # This action sets up a more advanced builder instance that
+        # supports the 'gha' cache backend.
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # Create a 'latest' tag for the default branch
             type=raw,value=latest,enable={{is_default_branch}}
-            # Create a tag based on the Git SHA
             type=sha,prefix=,format=short
 
       - name: Build and push Docker image
@@ -56,6 +54,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Enable build cache for faster subsequent builds
+          # The cache settings will now work correctly
           cache-from: type=gha
           cache-to: type=gha,mode=max
