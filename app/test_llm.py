@@ -1,55 +1,48 @@
 import sys
-import platform
+import os
 import llama_cpp
 
-def run_health_check():
+MODEL_PATH = "/models/qwen3.gguf"
+
+def run_load_test():
     """
-    Performs a health check on the llama_cpp installation using functions
-    verified against the official documentation.
+    Attempts to load the specified GGUF model file.
+    This is the final test to confirm if the model itself is the source
+    of the SIGILL (Exit Code 132) crash.
     """
-    print("--- Documentation-Verified Llama CPP Python Health Check ---")
+    print("--- Llama CPP Model Load Test ---")
+    
+    # Check if the model file actually exists inside the container
+    if not os.path.exists(MODEL_PATH):
+        print(f"Status: [FAIL] Model file not found at '{MODEL_PATH}' inside the container.")
+        print("Please ensure your volume mount is correct and the file is present.")
+        return 1
+    
+    print(f"Found model file at: {MODEL_PATH}")
+    print("Attempting to initialize Llama class...")
     
     try:
-        # 1. Print basic version and platform info
-        print(f"Python Version: {sys.version}")
-        print(f"Platform: {platform.platform()}")
-        print(f"llama_cpp version: {llama_cpp.__version__}")
+        # This is the line that will crash if the model is incompatible.
+        llm = llama_cpp.Llama(
+            model_path=MODEL_PATH,
+            n_ctx=512,      # Small context for a quick test
+            n_threads=2,   # Use 2 threads for the test
+            n_gpu_layers=0 # CPU only
+        )
         
-        # 2. Call the low-level backend initialization function.
-        # This is the most basic test. If this fails, the core library is broken.
-        print("\nAttempting to initialize llama.cpp backend...")
-        llama_cpp.llama_backend_init(numa=False)
-        print("Successfully called 'llama_backend_init'.")
-        
-        # 3. Get the system info directly from the C++ library.
-        # This is the definitive way to check for AVX support.
-        system_info_bytes = llama_cpp.llama_print_system_info()
-        print("\n--- System Info from llama.cpp ---")
-        info_str = system_info_bytes.decode('utf-8', errors='ignore')
-        print(info_str)
-        print("------------------------------------")
-        
-        # 4. Check that the system info confirms our expected build flags.
-        # For your N5105, both AVX and AVX2 should be ON (1).
-        if "AVX = 1" in info_str and "AVX2 = 1" in info_str:
-            print("Status: [SUCCESS] Build flags (AVX=1, AVX2=1) correctly detected.")
-        else:
-            print("Status: [FAIL] Expected build flags (AVX=1, AVX2=1) were NOT detected in system info!")
-            # This is a critical failure, but not a crash.
-            # We will still let the script exit gracefully.
-
-        # 5. Clean up the backend.
-        llama_cpp.llama_backend_free()
-        print("Successfully called 'llama_backend_free'.")
-
-        print("\nFinal Status: [SUCCESS] Health check passed. The library is loadable and built with the correct flags.")
+        # If the script reaches this line, the model loaded successfully.
+        print("\n--- MODEL LOADED SUCCESSFULLY! ---")
+        print(f"Model Details: {llm}")
+        print("\nFinal Status: [SUCCESS] The model is compatible with your CPU and llama_cpp build.")
         return 0
 
     except Exception as e:
-        print(f"\nFinal Status: [FAIL] An unexpected error occurred during health check: {e}")
+        # This will likely not be reached if it's a SIGILL crash,
+        # but it's good practice to have it.
+        print(f"\nFinal Status: [FAIL] An error occurred during model loading: {e}")
         import traceback
         traceback.print_exc()
         return 1
 
 if __name__ == "__main__":
-    sys.exit(run_health_check())
+    sys.exit(run_load_test())
