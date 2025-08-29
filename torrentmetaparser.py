@@ -878,13 +878,17 @@ class TorrentParser:
         """Parse release group from title using more specific patterns"""
         normalized_title = self._normalize_title(title)
         for pattern_name, pattern in self.group_patterns:
-         match = pattern.search(normalized_title)
-         if match:
-            # Use named group if available, otherwise group 1
-            if 'group' in pattern.groupindex:
-                return match.group('group')
-            else:
-                return match.group(1)
+            match = pattern.search(normalized_title)
+            if match:
+                # Use named group if available
+                if 'group' in pattern.groupindex:
+                    return match.group('group')
+                # For ExceptionGroup pattern (no capture groups), return the entire match
+                elif pattern_name == "ExceptionGroup":
+                    return match.group(0)
+                # For other patterns with capture groups
+                elif match.groups():
+                    return match.group(1)
         return None
 
     def parse(self, title: str) -> Dict[str, Any]:
