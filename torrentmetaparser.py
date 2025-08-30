@@ -1093,7 +1093,7 @@ def main():
         #print(f"\n--- Parsing Title {i+1} ---")
         #print(f"Original: {title}")
         result = parser.parse(title)
-        print(f"Raw result: {result}")
+        #print(f"Raw result: {result}")
         processed_result = post_process_result(result)
 
         # Print human-readable
