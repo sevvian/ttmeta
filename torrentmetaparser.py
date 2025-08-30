@@ -92,10 +92,13 @@ class TorrentParser:
         """Enhanced normalization based on Sonarr's parsing logic"""
         if not self._is_valid_title(title):
             return title
-            
+
         # Apply pre-processing
         normalized_title = self._pre_process_title(title)
-        
+
+        # FIRST: Convert en dash to regular dash for consistency
+        normalized_title = normalized_title.replace('–', '-')
+
         preserved_patterns = [
             r'\d+\.?\d*[GMK]B',  # File sizes
             r'\d+\.\d+',         # Audio codecs like 5.1
@@ -106,11 +109,13 @@ class TorrentParser:
             r'HEVC', r'AVC', r'AV1', r'XviD', r'DivX',
             r'x\d+', r'H\d+', r'H\.\d+',
             r'\d+p', r'\d+i', r'\d+x\d+',  # Resolutions
-            r'\[[^]]+\]', r'\([^)]+\)',    # Language brackets
+            r'\[[^]]+\]',                   # Keep bracket content (for groups/tags)
+            r'\(\s*(?:19|20)\d{2}\s*\)',   # Only preserve years in parentheses: (2019)
             r'S\d+E\d+', r'S\d+', r'Season\s+\d+',  # Season/episode patterns
-            r'\d{4}',  # Years
+            r'\b(?:19|20)\d{2}\b',  # Years (without parentheses)
+            r'\b(?:19|20)\d{2}-(?:19|20)\d{2}\b',  # Year ranges: 1951-1957
         ]
-        
+
         placeholder_map = {}
         for i, pattern in enumerate(preserved_patterns):
             matches = re.finditer(pattern, normalized_title, re.IGNORECASE)
@@ -118,15 +123,16 @@ class TorrentParser:
                 placeholder = f'__PRESERVED_{i}_{len(placeholder_map)}__'
                 normalized_title = normalized_title.replace(match.group(), placeholder)
                 placeholder_map[placeholder] = match.group()
-        
+
         # Replace other punctuation with spaces (more comprehensive)
+        # Now en dash is already converted to regular dash, so it won't be replaced
         normalized_title = re.sub(r'[^\w\s-]', ' ', normalized_title)
         normalized_title = re.sub(r'\s+', ' ', normalized_title).strip()
-        
+
         # Restore preserved patterns
         for placeholder, original in placeholder_map.items():
             normalized_title = normalized_title.replace(placeholder, original)
-        
+
         return normalized_title
     
     def _compile_season_patterns(self) -> List[Tuple[str, re.Pattern]]:
@@ -155,6 +161,11 @@ class TorrentParser:
             ("S##-##", re.compile(r's(\d{2})-(\d{2})', re.IGNORECASE)),
             ("S#-S#", re.compile(r's(\d)\s*-\s*s(\d)', re.IGNORECASE)),
             ("S##-S##", re.compile(r's(\d{2})\s*-\s*s(\d{2})', re.IGNORECASE)),
+                    # Keep only the multi-digit version of this pattern:
+            ("S#", re.compile(r's(\d+)(?![a-z0-9\-])', re.IGNORECASE)),  # Better negative lookahead
+            ("S#xE#", re.compile(r's(\d+)x[e]?(\d+)', re.IGNORECASE)),  # Handles S1xE1, S01xE01, S1xE10
+            ("S#xE#-#", re.compile(r's(\d+)x[e]?(\d+)-(\d+)', re.IGNORECASE)),  # Handles S1xE1-10
+
             
             # Multi-language season patterns
             ("Stagione #", re.compile(r'stagione\s+(\d+)', re.IGNORECASE)),
@@ -230,6 +241,13 @@ class TorrentParser:
             ("E##-##", re.compile(r'e(\d{2})-(\d{2})', re.IGNORECASE)),
             ("E#E#", re.compile(r'e(\d)e(\d)', re.IGNORECASE)),
             ("E##E##", re.compile(r'e(\d{2})e(\d{2})', re.IGNORECASE)),
+            ("S#xE#", re.compile(r's(\d+)x[e]?(\d+)', re.IGNORECASE)),
+
+            # Replace the single-digit patterns with multi-digit versions:
+            ("E#-#", re.compile(r'e(\d+)-(\d+)', re.IGNORECASE)),  # Replaces the old single-digit version
+                    # Add negative lookahead to prevent SxEx patterns from being captured as E patterns
+            ("E#-#", re.compile(r'(?<!x)e(\d+)-(\d+)', re.IGNORECASE)),  # Negative lookbehind
+            ("E##-##", re.compile(r'e(\d{2})-(\d{2})', re.IGNORECASE)),  # Keep this for exact 2-digit matches
             
             # Full word episode patterns
             ("Episode #", re.compile(r'episode\s+(\d+)', re.IGNORECASE)),
@@ -348,6 +366,16 @@ class TorrentParser:
                     # Additional check: episode numbers should be reasonable
                     if ep1.isdigit() and ep2.isdigit() and int(ep1) <= 200 and int(ep2) <= 200:
                         episode_matches.append(f"E{ep1.zfill(2)}-E{ep2.zfill(2)}")
+
+            # Add this for 3-group matches (SxEx-# patterns)
+            elif len(match.groups()) == 3:
+                ep1, ep2 = match.group(2), match.group(3)  # Skip season group (group 1)
+                # Check if both numbers should be excluded
+                if ep1 not in exclude_numbers and ep2 not in exclude_numbers:
+                    # Additional check: episode numbers should be reasonable
+                    if ep1.isdigit() and ep2.isdigit() and int(ep1) <= 200 and int(ep2) <= 200:
+                        episode_matches.append(f"E{ep1.zfill(2)}-E{ep2.zfill(2)}")
+
             elif pattern_name.startswith("Absolute"):
                 # Handle absolute episode numbers
                 abs_num = match.group(1)
@@ -488,6 +516,7 @@ class TorrentParser:
             ("DD+", re.compile(r'\bDD\+\b', re.IGNORECASE)),
             ("EAC#", re.compile(r'\bEAC(\d+)\b', re.IGNORECASE)),
             ("DTS", re.compile(r'\bDTS\b', re.IGNORECASE)),
+            ("DLMux", re.compile(r'\bDLMux\b', re.IGNORECASE)),
             ("DTS-HD", re.compile(r'\bDTS[-.]HD\b', re.IGNORECASE)),
             ("DTS-X", re.compile(r'\bDTS[-.]X\b', re.IGNORECASE)),
             ("TrueHD", re.compile(r'\bTrueHD\b', re.IGNORECASE)),
@@ -554,12 +583,12 @@ class TorrentParser:
         """Enhanced quality patterns based on Sonarr's QualityParser"""
         return [
             # Source types
-            ("WEB-DL", re.compile(r'\bWEB[-_. ]DL\b', re.IGNORECASE)),
-            ("WEBRip", re.compile(r'\bWEB[-_. ]Rip\b', re.IGNORECASE)),
+            ("WEB-DL", re.compile(r'\bWEB[-_. ]?DL\b', re.IGNORECASE)),
+            ("WEBRip", re.compile(r'\bWEB[-_. ]?Rip\b', re.IGNORECASE)),
             ("HDTV", re.compile(r'\bHDTV\b', re.IGNORECASE)),
             ("BluRay", re.compile(r'\bBlu[-_. ]?Ray\b', re.IGNORECASE)),
-            ("BD-Rip", re.compile(r'\bBD[-_. ]Rip\b', re.IGNORECASE)),
-            ("DVD-Rip", re.compile(r'\bDVD[-_. ]Rip\b', re.IGNORECASE)),
+            ("BD-Rip", re.compile(r'\bBD[-_. ]?Rip\b', re.IGNORECASE)),
+            ("DVD-Rip", re.compile(r'\bDVD[-_. ]?Rip\b', re.IGNORECASE)),
             ("HD-Rip", re.compile(r'\bHD[-_. ]Rip\b', re.IGNORECASE)),
             ("Telecine", re.compile(r'\bTelecine\b', re.IGNORECASE)),
             ("HDTS", re.compile(r'\bHDTS\b', re.IGNORECASE)),
@@ -622,7 +651,7 @@ class TorrentParser:
             ("[WEBSITE]", re.compile(r'\[(?:www\.)?([a-z0-9-]{2,}\.(?:com|org|net|info|ws|biz|tv|cc|io|me|us|uk|de|fr|fi|es|it|ru|ca|au|nz|jp|cn|in|br|mx|lv|pro|xyz|site|online|tech|club|fun|store|shop|blog|app|dev|edu|gov|mil)[a-z0-9.-]*)\]', re.IGNORECASE)),
 
             # Match website anywhere (must have proper TLD and not be part of episode patterns)
-            ("WebsiteAnywhere", re.compile(r'\b(?:www\.)?([a-z0-9-]{2,}\.(?:com|org|net|info|ws|biz|tv|cc|io|me|us|uk|de|fr|fi|es|it|ru|ca|au|nz|jp|cn|in|br|mx|lv|pro|xyz|site|online|tech|club|fun|store|shop|blog|app|dev|edu|gov|mil)[a-z0-9.-]*)\b', re.IGNORECASE)),
+            ("WebsiteAnywhere", re.compile(r'\b(?:www\.)?([a-z0-9-]{2,}\.(?:com|org|net|info|ws|biz|tv|cc|io|me|us|uk|de|fr|fi|es|it|ru|ca|au|nz|jp|cn|in|br|mx|lv|pro|xyz|site|online|tech|club|fun|store|shop|blog|app|dev|edu|gov|mil)(?:\/[^\s]*)?\b)', re.IGNORECASE)),
 
             # Known torrent sites (specific sites only)
             ("KnownSites", re.compile(r'\b(?:TamilRockers|kinokopilka|YTS\.MX|RARBG|ETRG|EVO|Tigole|QxR|DDR|CM|TBS|NTb|TLA|FGT|FQM|TrollHD|CtrlHD|EbP|D-Z0N3|decibeL|HDChina|CHD|WiKi|NGB|HDWinG|HDS|HDArea|HDBits|BeyondHD|BLUTONIUM|FraMeSToR|TayTO)\b', re.IGNORECASE)),
@@ -642,14 +671,17 @@ class TorrentParser:
     def _compile_group_patterns(self) -> List[Tuple[str, re.Pattern]]:
         """More specific group patterns based on Sonarr's ReleaseGroupParser"""
         return [
-         # Match group at the very end (after a dash)
-         ("-GROUP", re.compile(r'-(?P<group>[A-Za-z0-9]{2,})(?=\.[a-z]{2,4}$|$)', re.IGNORECASE)),
-         # Match group in brackets at the end
-         ("[GROUP]", re.compile(r'\[(?P<group>[A-Za-z0-9]{2,})\](?=\.[a-z]{2,4}$|$)', re.IGNORECASE)),
-         # Match group in parentheses at the end
-         ("(GROUP)", re.compile(r'\((?P<group>[A-Za-z0-9]{2,})\)(?=\.[a-z]{2,4}$|$)', re.IGNORECASE)),
-         # Match known group patterns that don't follow the standard
-         ("ExceptionGroup", re.compile(r'\b(?:D\-Z0N3|Fight-BB|VARYG|E\.N\.D|KRaLiMaRKo|BluDragon|DarQ|KCRT|BEN[_. ]THE[_. ]MEN|TAoE|QxR|Joy|ImE|UTR|t3nzin|Anime Time|Project Angel|Hakata Ramen|HONE|Vyndros|SEV|Garshasp|Kappa|Natty|RCVR|SAMPA|YOGI|r00t|EDGE2020)\b', re.IGNORECASE)),
+            # Match group at the very end (after a dash) - reject pure numbers
+            ("-GROUP", re.compile(r'-(?P<group>(?![0-9]+$)[A-Za-z0-9]{2,})(?=\.[a-z]{2,4}$|$)', re.IGNORECASE)),
+
+            # Match group in brackets at the end - reject pure numbers
+            ("[GROUP]", re.compile(r'\[(?P<group>(?![0-9]+$)[A-Za-z0-9]{2,})\](?=\.[a-z]{2,4}$|$)', re.IGNORECASE)),
+
+            # Match group in parentheses at the end - reject pure numbers
+            ("(GROUP)", re.compile(r'\((?P<group>(?![0-9]+$)[A-Za-z0-9]{2,})\)(?=\.[a-z]{2,4}$|$)', re.IGNORECASE)),
+
+            # Match known group patterns that don't follow the standard
+            ("ExceptionGroup", re.compile(r'\b(?:D\-Z0N3|Fight\-BB|VARYG|E\.N\.D|KRaLiMaRKo|BluDragon|DarQ|KCRT|BEN[_. ]THE[_. ]MEN|TAoE|QxR|Joy|ImE|UTR|t3nzin|Anime Time|Project Angel|Hakata Ramen|HONE|Vyndros|SEV|Garshasp|Kappa|Natty|RCVR|SAMPA|YOGI|r00t|EDGE2020)\b', re.IGNORECASE)),
         ]
 
     def parse_resolution(self, title: str) -> Optional[str]:
@@ -795,19 +827,31 @@ class TorrentParser:
     def parse_year(self, title: str) -> Optional[str]:
         """Parse year from title"""
         normalized_title = self._normalize_title(title)
+
+        # Check for year ranges first
+        year_range_pattern = re.compile(r'\b((19|20)\d{2})-((19|20)\d{2})\b')
+        year_range_match = year_range_pattern.search(normalized_title)
+
+        if year_range_match:
+            start_year, end_year = year_range_match.group(1), year_range_match.group(3)
+            if (1900 <= int(start_year) <= datetime.now().year + 1 and
+                1900 <= int(end_year) <= datetime.now().year + 1):
+                return f"{start_year}-{end_year}"
+
+        # Then check for single years
         for pattern_name, pattern in self.year_patterns:
             match = pattern.search(normalized_title)
             if match:
                 if pattern_name == "(####)":
                     return match.group(1)
                 elif pattern_name == "####":
-                    # Check if this is a valid year (not episode number, etc.)
                     year = match.group(1)
                     if 1900 <= int(year) <= datetime.now().year + 1:
                         return year
                 elif pattern_name == "'##":
                     year = f"20{match.group(1)}" if int(match.group(1)) < 50 else f"19{match.group(1)}"
                     return year
+
         return None
 
     def parse_website(self, title: str) -> Optional[str]:
@@ -844,19 +888,26 @@ class TorrentParser:
             'season', 'episode', 'episodes', 'complete', 'full', 'part',
             'webrip', 'web-dl', 'hdtv', 'bluray', 'blu-ray', 'remux',
             '720p', '1080p', '2160p', '4k', 'repack', 'proper', 'final',
-            'extended', 'director', 'cut', 'theatrical', 'unrated', 'uncut'
+            'extended', 'director', 'cut', 'theatrical', 'unrated', 'uncut',
+            'combined', 'surround', 'stereo', 'dolby'  # Added more false positives
         }
 
-        # Check if website is in false positives list
-        if website_lower in false_positives:
-            return True
+        # Check if any part of the website matches false positives
+        website_parts = website_lower.split('.')
+        for part in website_parts:
+            if part in false_positives:
+                return True
 
-        # Check if website contains common file extensions (likely not a website)
-        if any(ext in website_lower for ext in ['.mkv', '.mp4', '.avi', '.m4v', '.mpg', '.mpeg']):
+        # Check if website contains common file extensions
+        if any(ext in website_lower for ext in ['.mkv', '.mp4', '.avi', '.m4v', '.mpg', '.mpeg', '.srt', '.sub']):
             return True
 
         # Check if website is too short to be a real domain
-        if len(website_lower) < 5:  # Most domains are at least 5 chars
+        if len(website_lower) < 6:  # Increased minimum length
+            return True
+
+        # Check if it looks like a random word with TLD (like episodes.combined)
+        if len(website_parts) > 1 and any(len(part) < 3 for part in website_parts[:-1]):
             return True
 
         return False
@@ -927,33 +978,29 @@ def main():
 
     # Your test titles list
     test_titles = [
-
-"[Shourai] Fateless [English] (Episode 10 Part 2).zip",
-"[Sakurato] Tonikaku Kawaii S2 [06][HEVC-10bit 1080p AAC][CHS&CHT].mkv",
-"www.TamilBlasters.ws - Under The Dome (2013) [Season 1 Ep (01-13) - [Tamil + Telugu + Hindi] - 720p HD HEVC - x265 - AAC - 2.9GB]",
-"M.A.S.H  [S01-Ep 1] (1972-1983) 1080p BluRay H264 DolbyD 5.1 + nickarad",
-"www.TamilRockers.lv - As I'm Suffering From Kadhal [Season 1 - 10 Episodes - 720p HD AVC - 3.2GB - Tamil]",
-"Suits (Season 06 Episode 04)(www.kinokopilka.pro)",
-"Game Of Thrones [HDTVrip-720p](Season 03 Episode 08)(www.kinokopilka.tv)",
-"Justin T & Rihanna @ Alan Carr. Chatty Man. 27Sep2013 (S11E05. 100th episode Special)",
-"Game Of Thrones (Season 04 Episode 03) (www.kinokopilka.tv)",
-"Game Of Thrones (Season 03 Episode 03)(www.kinokopilka.tv)",
-"Shintaro The Samurai - (Season 2 Episodes 1-3)",
-"Teen Wolf (Season 06 Episodes 16-17) (www.kinokopilka.pro)",
-"Brooklyn Nine-Nine (Season 03 Episode 12) (www.kinоkоpilka.tv)",
-"Suits (Season 07 Episode 05)(www.kinokopilka.pro)",
-"Suits (Season 07 Episode 08)(www.kinokopilka.pro)",
-"Senke nad Balkanom (2017) (S01.ep 7.8-10) 1080p",
-"Mr. Robot [WEB-DL-1080p] (Season 03 Episode 03) (www.kinokopilka.pro)",
-"Game Of Thrones (Season 06 Episode 06)(www.kinokopilka.pro)",
-"Elementary (Season 06 Episodes 03-04)(www.kinokopilka.pro)",
-"Borcy.za.svobodu.Luch (S1-2_EP1-12) (2017-2018)WEB-DLRip",
-"Justin T & Rihanna @ Alan Carr. Chatty Man. 27Sep2013 (S11E05. 100th episode Special)",
-"Senke nad Balkanom (2017) (S01.ep 9.10-10) 1080p",
-"Senke.nad.Balkanom.S01-02(2017)720p.AAC.x264-ReEnc-Livada",
-"king-of-the-road-s1s2s3",
-
-    ]
+"Longmire (2012) Season 1-6 S01-S06 (1080p BluRay x265 HEVC 10bit AAC 5.1 Silence)",
+"Black.Mirror.S01-S05.Tutte.Le.Stagioni.ITA.DLMux.x264-UBi",
+"Scorpion.S01-04.ITA.ENG.DLMux.XviD-Pir8",
+"기황후.The.Empress.Ki.S01-HD",
+"Ultimate Force S01-S04 (2002-2006) SD HEVC H265",
+"Grimm.S01-04.WEB-DLRip.Generalfilm",
+"Ghost.Wisperer.S01-S05.ITA.DVDRIP.x264-mkeagle3",
+"Dexter 2006-2013 [S01-S08] [1080p.WEB-DL.HEVC.-FT][ENG-Lektor PL][Alusia]",
+"The Ancient Magus Bride S01-E24 Live and let live.mp4",
+"I Love.Lucy.1951–1957.S1-S2-S3-S4-S5-S6-S7-S8-S9.1080p.BLURAY.and.REMUX.and.WEB-DL - [iCMAL]",
+"Red.Dead.Redemption.2.PS4-DUPLEX",
+"Alpine.The.Simulation.Game.Incl.Update.v1.04.PS4-DUPLEX",
+"The High Chaparral - S1xE1-10",
+"Dr. House - Medical Division S2 E01-24 WEBRip 1080p HEVC AAC ITA ENG SUB ITA ENG - Lullozzo",
+"Game of Thrones S01 E01-07  HDTV Xvid",
+"Orange Is the New Black S05 E01-13 BluRay [Hindi 5.1 + English 5.1] 720p x264 AAC ESub - mkvCinemas [Telly]",
+"Breeders (S01 E01-07 (10)) (2020) WEB-DL 1080p",
+"Sorelle Sbagliate - The Better Sister S1 E01-08 WEBRip 1080p HEVC AAC ITA ENG SUB ITA ENG - Lullozzo",
+"Blackstar S01 e01-13 mux by thegatto [T7ST]",
+"Teen Titans S03 e01-13",
+"Timon e Pumbaa S03 e01-26 by thegatto [T7ST]",
+"Keizoku 2 SPEC (2010) E01-10 BoxSet",
+]
 
     # Add the post-processing functions here
     def post_process_result(result):
@@ -985,20 +1032,19 @@ def main():
         return processed
 
     def _process_season_episode_field(field_value):
-        """Process season/episode field to deduplicate and keep most frequent ranges"""
+        """Process season/episode field to prioritize meaningful ranges"""
         if not field_value:
             return None
 
         # Split by comma and strip whitespace
         values = [v.strip() for v in field_value.split(",")]
 
-        # Count frequency of each value
         from collections import Counter
         value_counts = Counter(values)
 
-        # Separate ranges and singles
-        ranges = []
+        # Separate singles and ranges
         singles = []
+        ranges = []
 
         for value in values:
             if '-' in value:
@@ -1006,27 +1052,38 @@ def main():
             else:
                 singles.append(value)
 
-        # If we have ranges, keep only the most frequent one
+        # PRIORITY 1: If we have ranges, pick the one with widest span
         if ranges:
-            # Find range with highest frequency count
             best_range = None
-            max_count = 0
+            max_span = -1
 
             for range_val in set(ranges):  # Check unique ranges only
-                count = value_counts[range_val]
-                if count > max_count:
-                    max_count = count
-                    best_range = range_val
+                # Calculate the span of this range
+                if range_val.count('-') == 1:
+                    parts = range_val.split('-')
+                    if len(parts) == 2 and parts[0].startswith('E') and parts[1].startswith('E'):
+                        try:
+                            start = int(parts[0][1:])  # Extract number after 'E'
+                            end = int(parts[1][1:])    # Extract number after 'E'
+                            span = end - start
 
-            # Use the most frequent range
-            if best_range:
+                            # Prefer ranges with meaningful spans (not E01-E01)
+                            if span > max_span:
+                                max_span = span
+                                best_range = range_val
+                        except ValueError:
+                            continue
+
+            # If we found a range with meaningful span, return it
+            if best_range and max_span > 0:
                 return best_range
 
-        # If no ranges or singles only, deduplicate and return most frequent
+            # If all ranges are zero-span (like E01-E01), fall back to frequency
+            return max(set(ranges), key=lambda x: value_counts[x])
+
+        # PRIORITY 2: If no ranges, use most frequent single value
         if singles:
-            # Find most frequent single value
-            most_frequent_single = max(set(singles), key=lambda x: value_counts[x])
-            return most_frequent_single
+            return max(set(singles), key=lambda x: value_counts[x])
 
         return None
 
@@ -1036,6 +1093,7 @@ def main():
         #print(f"\n--- Parsing Title {i+1} ---")
         #print(f"Original: {title}")
         result = parser.parse(title)
+        print(f"Raw result: {result}")
         processed_result = post_process_result(result)
 
         # Print human-readable
