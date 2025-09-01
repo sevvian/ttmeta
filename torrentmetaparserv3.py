@@ -489,7 +489,7 @@ class TorrentParser:
         exclude_numbers.update(audio_numbers)
 
         # DEBUG: Show what numbers are being excluded
-        print(f"DEBUG: exclude_numbers: {exclude_numbers}")
+        #print(f"DEBUG: exclude_numbers: {exclude_numbers}")
 
         # Check for special episodes first
         for pattern_name, pattern in self.special_episode_patterns:
@@ -519,12 +519,12 @@ class TorrentParser:
         season_numbers = set()
 
         if season_info:
-            print(f"DEBUG: Season info: {season_info}")
+            #print(f"DEBUG: Season info: {season_info}")
             # Extract season numbers from season_info
             season_matches = re.findall(r'S(\d+)', season_info)
             for num in season_matches:
                 season_numbers.add(num)
-            print(f"DEBUG: Season numbers: {season_numbers}")
+            #print(f"DEBUG: Season numbers: {season_numbers}")
 
         # Define range patterns and their priorities (higher number = higher priority)
         range_patterns = {
@@ -577,10 +577,10 @@ class TorrentParser:
             matches = list(pattern.finditer(normalized_title))
 
             if matches:
-                print(f"DEBUG: Pattern '{pattern_name}' has {len(matches)} matches")
+                #print(f"DEBUG: Pattern '{pattern_name}' has {len(matches)} matches")
                 for match in matches:
                     all_matches.append((pattern_name, match.group(0), match.groups()))
-                    print(f"DEBUG:   Match: '{match.group(0)}' -> groups: {match.groups()}")
+                    #print(f"DEBUG:   Match: '{match.group(0)}' -> groups: {match.groups()}")
 
             for match in matches:
                 # Determine if this is an episode pattern based on the pattern name
@@ -593,14 +593,14 @@ class TorrentParser:
 
                 # For episode patterns, we don't need to check season context
                 if is_episode_pattern:
-                    print(f"DEBUG: Processing episode pattern: {pattern_name}")
+                    #print(f"DEBUG: Processing episode pattern: {pattern_name}")
 
                     # Handle episode count patterns (lower priority than explicit ranges)
                     if pattern_name in episode_count_patterns:
                         episode_count = match.group(1)
                         # Check if this number is in season_numbers (indicating it's a season, not episode count)
                         if episode_count in season_numbers:
-                            print(f"DEBUG: Skipping episode count pattern {episode_count} as it matches a season number")
+                            #print(f"DEBUG: Skipping episode count pattern {episode_count} as it matches a season number")
                             continue
 
                         if episode_count not in exclude_numbers and episode_count.isdigit():
@@ -610,7 +610,7 @@ class TorrentParser:
                                 match_key = f"E1-E{count}"
                                 if match_key not in potential_matches or priority > potential_matches[match_key][1]:
                                     potential_matches[match_key] = (match.group(0), priority)
-                                    print(f"DEBUG: Added episode count with priority {priority}: {match_key}")
+                                    #print(f"DEBUG: Added episode count with priority {priority}: {match_key}")
                         continue
 
                     # Handle range patterns
@@ -620,11 +620,11 @@ class TorrentParser:
                         # For patterns with 2 groups (range patterns)
                         if len(match.groups()) >= 2:
                             ep1, ep2 = match.group(1), match.group(2)
-                            print(f"DEBUG: Range values: ep1={ep1}, ep2={ep2}")
+                            #print(f"DEBUG: Range values: ep1={ep1}, ep2={ep2}")
 
                             # Check if this is likely a year range first
                             if self._is_likely_year_range(ep1, ep2, match.start(1), normalized_title):
-                                print(f"DEBUG: Skipping year range: {ep1}-{ep2}")
+                                #print(f"DEBUG: Skipping year range: {ep1}-{ep2}")
                                 continue
 
                             # Check if numbers should be excluded
@@ -632,7 +632,7 @@ class TorrentParser:
                             ep2_excluded = ep2 in exclude_numbers
 
                             if ep1_excluded or ep2_excluded:
-                                print(f"DEBUG: Range {ep1}-{ep2} excluded - ep1_excluded: {ep1_excluded}, ep2_excluded: {ep2_excluded}")
+                                #print(f"DEBUG: Range {ep1}-{ep2} excluded - ep1_excluded: {ep1_excluded}, ep2_excluded: {ep2_excluded}")
                                 continue
 
                             # Validate as episode range
@@ -642,13 +642,13 @@ class TorrentParser:
                                 match_key = f"E{ep1.zfill(2)}-E{ep2.zfill(2)}"
                                 if match_key not in potential_matches or priority > potential_matches[match_key][1]:
                                     potential_matches[match_key] = (match.group(0), priority)
-                                    print(f"DEBUG: Added range with priority {priority}: {match_key}")
+                                    #print(f"DEBUG: Added range with priority {priority}: {match_key}")
                             else:
-                                print(f"DEBUG: Range validation failed for {ep1}-{ep2}")
-                                #pass
+                                #print(f"DEBUG: Range validation failed for {ep1}-{ep2}")
+                                pass
                         else:
-                            print(f"DEBUG: Range pattern {pattern_name} has {len(match.groups())} groups, expected at least 2")
-                            #pass
+                            #print(f"DEBUG: Range pattern {pattern_name} has {len(match.groups())} groups, expected at least 2")
+                            pass
 
                         continue  # Skip further processing for range patterns
 
@@ -658,7 +658,7 @@ class TorrentParser:
                     episode_num = match.group(1)  # Get the first captured group
 
                 if episode_num and self._is_likely_season_context(episode_num, match.start(1), normalized_title):
-                    print(f"DEBUG: Skipping season number: {episode_num}")
+                    #print(f"DEBUG: Skipping season number: {episode_num}")
                     continue  # Skip season numbers
 
                 # Process single episode patterns
@@ -685,7 +685,7 @@ class TorrentParser:
                     if (episode_num not in exclude_numbers and episode_num.isdigit() and
                         int(episode_num) <= 200 and not self._is_in_audio_context(episode_num, match.start(1), normalized_title)):
                         episode_matches.append(f"E{episode_num.zfill(2)}")
-                        print(f"DEBUG: Added single episode: E{episode_num.zfill(2)}")
+                        #print(f"DEBUG: Added single episode: E{episode_num.zfill(2)}")
 
                 elif len(match.groups()) == 2:
                     # Only process if not already handled as a range pattern
@@ -695,7 +695,7 @@ class TorrentParser:
                             ep1.isdigit() and ep2.isdigit() and
                             int(ep1) <= 200 and int(ep2) <= 200):
                             episode_matches.append(f"E{ep1.zfill(2)}-E{ep2.zfill(2)}")
-                            print(f"DEBUG: Added range from 2-group pattern: E{ep1.zfill(2)}-E{ep2.zfill(2)}")
+                            #print(f"DEBUG: Added range from 2-group pattern: E{ep1.zfill(2)}-E{ep2.zfill(2)}")
 
                 elif len(match.groups()) == 3:
                     # Only process if not already handled as a range pattern
@@ -705,7 +705,7 @@ class TorrentParser:
                             ep1.isdigit() and ep2.isdigit() and
                             int(ep1) <= 200 and int(ep2) <= 200):
                             episode_matches.append(f"E{ep1.zfill(2)}-E{ep2.zfill(2)}")
-                            print(f"DEBUG: Added range from 3-group pattern: E{ep1.zfill(2)}-E{ep2.zfill(2)}")
+                            #print(f"DEBUG: Added range from 3-group pattern: E{ep1.zfill(2)}-E{ep2.zfill(2)}")
 
                 elif pattern_name.startswith("Absolute"):
                     abs_num = match.group(1)
@@ -714,7 +714,7 @@ class TorrentParser:
                         # Only add if we don't have any higher priority matches
                         if not potential_matches:
                             episode_matches.append(f"Abs{abs_num.zfill(3)}")
-                            print(f"DEBUG: Added absolute episode: Abs{abs_num.zfill(3)}")
+                            #print(f"DEBUG: Added absolute episode: Abs{abs_num.zfill(3)}")
 
         # Add the highest priority potential matches to the episode_matches
         if potential_matches:
@@ -722,7 +722,7 @@ class TorrentParser:
             sorted_matches = sorted(potential_matches.items(), key=lambda x: x[1][1], reverse=True)
             for match_key, (match_text, priority) in sorted_matches:
                 episode_matches.append(match_key)
-                print(f"DEBUG: Added high priority match: {match_key} (priority: {priority})")
+                #print(f"DEBUG: Added high priority match: {match_key} (priority: {priority})")
 
         # Check for date-based episodes
         date_patterns = [
@@ -737,9 +737,9 @@ class TorrentParser:
                 if len(match) == 3:
                     episode_matches.append(f"Date:{match[0]}-{match[1]}-{match[2]}")
 
-        print(f"DEBUG: All matches found: {all_matches}")
-        print(f"DEBUG: Potential matches: {potential_matches}")
-        print(f"DEBUG: Final episode matches: {episode_matches}")
+        #print(f"DEBUG: All matches found: {all_matches}")
+        #print(f"DEBUG: Potential matches: {potential_matches}")
+        #print(f"DEBUG: Final episode matches: {episode_matches}")
         return ", ".join(episode_matches) if episode_matches else None
 
 
@@ -935,7 +935,7 @@ class TorrentParser:
                 priority = season_priorities.get(pattern_name, 1)
 
                 # Debug logging
-                print(f"DEBUG: Season pattern '{pattern_name}' matched: '{match.group()}' at position {match_start}")
+                #print(f"DEBUG: Season pattern '{pattern_name}' matched: '{match.group()}' at position {match_start}")
 
                 if pattern_name in ["Complete Season", "Complete Seasons", "Full Season", "Season Pack",
                                 "All Seasons", "All Season"]:
@@ -943,7 +943,7 @@ class TorrentParser:
                     match_key = pattern_name
                     if match_key not in potential_matches or priority > potential_matches[match_key][1]:
                         potential_matches[match_key] = (match.group(0), priority, match_start)
-                        print(f"DEBUG: Added general season pattern: {match_key} with priority {priority}")
+                        #print(f"DEBUG: Added general season pattern: {match_key} with priority {priority}")
 
                 elif pattern_name in ["Season list", "S list"]:
                     season_text = match.group(1)
@@ -958,12 +958,12 @@ class TorrentParser:
                                 match_key = f"S{min_season:02d}-S{max_season:02d}"
                                 if match_key not in potential_matches or priority > potential_matches[match_key][1]:
                                     potential_matches[match_key] = (match.group(0), priority, match_start)
-                                    print(f"DEBUG: Added season list range: {match_key} with priority {priority}")
+                                    #print(f"DEBUG: Added season list range: {match_key} with priority {priority}")
                             else:
                                 match_key = f"S{min_season:02d}"
                                 if match_key not in potential_matches or priority > potential_matches[match_key][1]:
                                     potential_matches[match_key] = (match.group(0), priority, match_start)
-                                    print(f"DEBUG: Added season list single: {match_key} with priority {priority}")
+                                    #print(f"DEBUG: Added season list single: {match_key} with priority {priority}")
 
                 elif pattern_name == "S+S+S list":
                     season_text = match.group(1).lower()
@@ -978,12 +978,12 @@ class TorrentParser:
                                 match_key = f"S{min_season:02d}-S{max_season:02d}"
                                 if match_key not in potential_matches or priority > potential_matches[match_key][1]:
                                     potential_matches[match_key] = (match.group(0), priority, match_start)
-                                    print(f"DEBUG: Added S+S+S list range: {match_key} with priority {priority}")
+                                    #print(f"DEBUG: Added S+S+S list range: {match_key} with priority {priority}")
                             else:
                                 match_key = f"S{min_season:02d}"
                                 if match_key not in potential_matches or priority > potential_matches[match_key][1]:
                                     potential_matches[match_key] = (match.group(0), priority, match_start)
-                                    print(f"DEBUG: Added S+S+S list single: {match_key} with priority {priority}")
+                                    #print(f"DEBUG: Added S+S+S list single: {match_key} with priority {priority}")
 
                 elif pattern_name in ["Season # to #", "S# to #"]:
                     s1, s2 = int(match.group(1)), int(match.group(2))
@@ -994,7 +994,7 @@ class TorrentParser:
                                 match_key = f"S{min_season:02d}-S{max_season:02d}"
                                 if match_key not in potential_matches or priority > potential_matches[match_key][1]:
                                     potential_matches[match_key] = (match.group(0), priority, match_start)
-                                    print(f"DEBUG: Added 'to' range: {match_key} with priority {priority}")
+                                    #print(f"DEBUG: Added 'to' range: {match_key} with priority {priority}")
 
                 elif pattern_name == "Season Roman":
                     roman_num = match.group(1)
@@ -1004,7 +1004,7 @@ class TorrentParser:
                             match_key = f"S{season_num:02d}"
                             if match_key not in potential_matches or priority > potential_matches[match_key][1]:
                                 potential_matches[match_key] = (match.group(0), priority, match_start)
-                                print(f"DEBUG: Added Roman season: {match_key} with priority {priority}")
+                                #print(f"DEBUG: Added Roman season: {match_key} with priority {priority}")
                     except ValueError:
                         pass
 
@@ -1016,7 +1016,7 @@ class TorrentParser:
                             match_key = f"S{season_num:02d}"
                             if match_key not in potential_matches or priority > potential_matches[match_key][1]:
                                 potential_matches[match_key] = (match.group(0), priority, match_start)
-                                print(f"DEBUG: Added Roman S season: {match_key} with priority {priority}")
+                                #print(f"DEBUG: Added Roman S season: {match_key} with priority {priority}")
                     except ValueError:
                         pass
 
@@ -1026,7 +1026,7 @@ class TorrentParser:
                         match_key = f"S{season_num.zfill(2)}"
                         if match_key not in potential_matches or priority > potential_matches[match_key][1]:
                             potential_matches[match_key] = (match.group(0), priority, match_start)
-                            print(f"DEBUG: Added single season: {match_key} with priority {priority}")
+                            #print(f"DEBUG: Added single season: {match_key} with priority {priority}")
 
                 elif len(match.groups()) == 2:
                     s1, s2 = match.group(1), match.group(2)
@@ -1037,13 +1037,13 @@ class TorrentParser:
                                 match_key = f"S{s1.zfill(2)}-S{s2.zfill(2)}"
                                 if match_key not in potential_matches or priority > potential_matches[match_key][1]:
                                     potential_matches[match_key] = (match.group(0), priority, match_start)
-                                    print(f"DEBUG: Added 2-group range: {match_key} with priority {priority}")
+                                    #print(f"DEBUG: Added 2-group range: {match_key} with priority {priority}")
                             else:
                                 # If it's the same number, treat it as a single season
                                 match_key = f"S{s1.zfill(2)}"
                                 if match_key not in potential_matches or priority > potential_matches[match_key][1]:
                                     potential_matches[match_key] = (match.group(0), priority, match_start)
-                                    print(f"DEBUG: Added 2-group single: {match_key} with priority {priority}")
+                                    #print(f"DEBUG: Added 2-group single: {match_key} with priority {priority}")
 
         # Sort potential matches by priority (highest first), then by position (earlier first)
         sorted_matches = sorted(potential_matches.items(), key=lambda x: (x[1][1], x[1][2]), reverse=True)
@@ -1067,7 +1067,7 @@ class TorrentParser:
                         seen_seasons.add(season_num)
 
             season_matches.append(match_key)
-            print(f"DEBUG: Final season match: {match_key}")
+            #print(f"DEBUG: Final season match: {match_key}")
 
         # Remove duplicates while preserving order
         seen = set()
@@ -1078,7 +1078,7 @@ class TorrentParser:
                 unique_season_matches.append(match)
 
         result = ", ".join(unique_season_matches) if unique_season_matches else None
-        print(f"DEBUG: Final season result: {result}")
+        #print(f"DEBUG: Final season result: {result}")
         return result
 
     def _roman_to_int(self, s: str) -> int:
