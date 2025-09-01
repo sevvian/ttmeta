@@ -95,6 +95,37 @@ class TorrentParser:
             (re.compile(r'\b(?:special|ova|ovd|oav|bonus|extra|speciale)\b', re.IGNORECASE), None),
         ]
 
+
+    # Add this method to the TorrentParser class
+    def _detect_content_type(self, title: str, normalized_title: str) -> str:
+        """Detect if content is a movie or series based on patterns"""
+        # Check for movie indicators
+        movie_indicators = [
+            r'\bmovie\b', r'\bfilm\b', r'\bfeature\b', r'\bcollections?\b',
+            r'\bcomplete collections?\b', r'\b\d{4} collections?\b',
+            r'\b\d+ movies?\b', r'\ball movies?\b', r'\bfull movies?\b'
+        ]
+
+        for pattern in movie_indicators:
+            if re.search(pattern, normalized_title, re.IGNORECASE):
+                return "movie"
+
+        # Check for series indicators
+        series_indicators = [
+            r'\bseason\b', r'\bepisode\b', r'\bep\b', r'\bs\d+\b', r'\be\d+\b',
+            r'\bseries\b', r'\bshow\b', r'\btv\b', r'\bcomplete series\b',
+            r'\bcomplete seasons?\b', r'\ball episodes\b'
+        ]
+
+        for pattern in series_indicators:
+            if re.search(pattern, normalized_title, re.IGNORECASE):
+                return "series"
+
+        # Default to series if we can't determine (preserve existing behavior)
+        return "series"
+
+
+
     def _pre_process_title(self, title: str) -> str:
         """Apply pre-processing substitutions to title"""
         processed_title = title
@@ -185,24 +216,25 @@ class TorrentParser:
             ("All Seasons", re.compile(r'all\s+seasons', re.IGNORECASE)),
             ("All Season", re.compile(r'all\s+season', re.IGNORECASE)),
 
-              # Season number patterns - ENHANCED WITH HYPHEN SUPPORT
-            ("Season #", re.compile(r'season[-_. ]+(\d+)', re.IGNORECASE)),  # Changed from \s to [-_. ]
+            # Season number patterns - ENHANCED WITH HYPHEN SUPPORT
+            ("Season #", re.compile(r'season[-_. ]+(\d+)', re.IGNORECASE)),
             ("Season ##", re.compile(r'season[-_. ]+(\d{2})', re.IGNORECASE)),
             ("Season #-#", re.compile(r'season[-_. ]+(\d+)-(\d+)', re.IGNORECASE)),
             ("Season ##-##", re.compile(r'season[-_. ]+(\d{2})-(\d{2})', re.IGNORECASE)),
             ("Season #-Season #", re.compile(r'season[-_. ]+(\d+)\s*-\s*season[-_. ]+(\d+)', re.IGNORECASE)),
             ("Season ##-Season ##", re.compile(r'season[-_. ]+(\d{2})\s*-\s*season[-_. ]+(\d{2})', re.IGNORECASE)),
 
-            # Short season patterns
-            ("S#", re.compile(r's(\d)\b', re.IGNORECASE)),
-            ("S##", re.compile(r's(\d{2})', re.IGNORECASE)),
-            ("S#-#", re.compile(r's(\d)-(\d)', re.IGNORECASE)),
-            ("S##-##", re.compile(r's(\d{2})-(\d{2})', re.IGNORECASE)),
-            ("S#-S#", re.compile(r's(\d)\s*-\s*s(\d)', re.IGNORECASE)),
-            ("S##-S##", re.compile(r's(\d{2})\s*-\s*s(\d{2})', re.IGNORECASE)),
-            ("S#", re.compile(r's(\d+)(?![a-z0-9\-])', re.IGNORECASE)),
-            ("S#xE#", re.compile(r's(\d+)x[e]?(\d+)', re.IGNORECASE)),
-            ("S#xE#-#", re.compile(r's(\d+)x[e]?(\d+)-(\d+)', re.IGNORECASE)),
+            # Short season patterns - FIXED to prevent false matches
+            ("S#", re.compile(r'(?<!\w)S(\d)(?!\d)', re.IGNORECASE)),  # More specific pattern
+            ("S##", re.compile(r'(?<!\w)S(\d{2})(?!\d)', re.IGNORECASE)),  # More specific pattern
+            ("S#-#", re.compile(r'(?<!\w)S(\d)-(\d)(?!\d)', re.IGNORECASE)),  # More specific pattern
+            ("S##-##", re.compile(r'(?<!\w)S(\d{2})-(\d{2})(?!\d)', re.IGNORECASE)),  # More specific pattern
+            ("S#-S#", re.compile(r'(?<!\w)S(\d)\s*-\s*S(\d)(?!\d)', re.IGNORECASE)),  # More specific pattern
+            ("S##-S##", re.compile(r'(?<!\w)S(\d{2})\s*-\s*S(\d{2})(?!\d)', re.IGNORECASE)),  # More specific pattern
+            ("S#", re.compile(r'(?<!\w)S(\d+)(?![a-z0-9\-])', re.IGNORECASE)),  # More specific pattern
+
+            ("S#xE#", re.compile(r'S(\d+)x[e]?(\d+)', re.IGNORECASE)),
+            ("S#xE#-#", re.compile(r'S(\d+)x[e]?(\d+)-(\d+)', re.IGNORECASE)),
 
             # Multi-language season patterns
             ("Stagione #", re.compile(r'stagione\s+(\d+)', re.IGNORECASE)),
@@ -212,47 +244,47 @@ class TorrentParser:
             ("Saison #", re.compile(r'saison\s+(\d+)', re.IGNORECASE)),
 
             # Complete short season patterns
-            ("Complete S#", re.compile(r'complete\s+s(\d)', re.IGNORECASE)),
-            ("Complete S##", re.compile(r'complete\s+s(\d{2})', re.IGNORECASE)),
-            ("Complete S#-S#", re.compile(r'complete\s+s(\d)\s*-\s*s(\d)', re.IGNORECASE)),
-            ("Complete S##-S##", re.compile(r'complete\s+s(\d{2})\s*-\s*s(\d{2})', re.IGNORECASE)),
+            ("Complete S#", re.compile(r'complete\s+S(\d)', re.IGNORECASE)),
+            ("Complete S##", re.compile(r'complete\s+S(\d{2})', re.IGNORECASE)),
+            ("Complete S#-S#", re.compile(r'complete\s+S(\d)\s*-\s*S(\d)', re.IGNORECASE)),
+            ("Complete S##-S##", re.compile(r'complete\s+S(\d{2})\s*-\s*S(\d{2})', re.IGNORECASE)),
 
             # Season with complete
             ("Season # Complete", re.compile(r'season\s+(\d+)\s+complete', re.IGNORECASE)),
             ("Season ## Complete", re.compile(r'season\s+(\d{2})\s+complete', re.IGNORECASE)),
-            ("S# Complete", re.compile(r's(\d)\s+complete', re.IGNORECASE)),
-            ("S## Complete", re.compile(r's(\d{2})\s+complete', re.IGNORECASE)),
+            ("S# Complete", re.compile(r'S(\d)\s+complete', re.IGNORECASE)),
+            ("S## Complete", re.compile(r'S(\d{2})\s+complete', re.IGNORECASE)),
 
             # Full short season
-            ("Full S#", re.compile(r'full\s+s(\d)', re.IGNORECASE)),
-            ("Full S##", re.compile(r'full\s+s(\d{2})', re.IGNORECASE)),
+            ("Full S#", re.compile(r'full\s+S(\d)', re.IGNORECASE)),
+            ("Full S##", re.compile(r'full\s+S(\d{2})', re.IGNORECASE)),
 
             # 4-digit season numbers
-            ("S####", re.compile(r's(\d{4})', re.IGNORECASE)),
+            ("S####", re.compile(r'S(\d{4})', re.IGNORECASE)),
 
             # Season only with year
             ("Season # (####)", re.compile(r'season\s+(\d+)\s+\(\d{4}\)', re.IGNORECASE)),
 
             # Partial season packs
             ("Season # Part #", re.compile(r'season\s+(\d+)\s+part\s+(\d+)', re.IGNORECASE)),
-            ("S# Part #", re.compile(r's(\d)\s+part\s+(\d+)', re.IGNORECASE)),
+            ("S# Part #", re.compile(r'S(\d)\s+part\s+(\d+)', re.IGNORECASE)),
             ("Season # Vol #", re.compile(r'season\s+(\d+)\s+vol\s+(\d+)', re.IGNORECASE)),
 
             # Season ranges with "to"
             ("Season # to #", re.compile(r'season\s+(\d+)\s+to\s+(\d+)', re.IGNORECASE)),
-            ("S# to #", re.compile(r's(\d+)\s+to\s+(\d+)', re.IGNORECASE)),
+            ("S# to #", re.compile(r'S(\d+)\s+to\s+(\d+)', re.IGNORECASE)),
 
             # Multi-season patterns
             ("Season list", re.compile(r'season\s+((?:\d+\s*[, &]\s*)+\d+)', re.IGNORECASE)),
-            ("S list", re.compile(r's((?:\d+\s*[, &]\s*)+\d+)', re.IGNORECASE)),
-            ("S+S+S list", re.compile(r'\b((?:s(?:eason)?\s*\d+\s*[\.\-_,+ ]?\s*){2,})\b', re.IGNORECASE)),
+            ("S list", re.compile(r'(?<!\w)S((?:\d+\s*[, &]\s*)+\d+)(?!\w)', re.IGNORECASE)),  # More specific pattern
+            ("S+S+S list", re.compile(r'\b((?:S(?:eason)?\s*\d+\s*[\.\-_,+ ]?\s*){2,})\b', re.IGNORECASE)),
 
             # Roman numeral seasons
             ("Season Roman", re.compile(r'season\s+([IVXLCDM]+)', re.IGNORECASE)),
-            ("S Roman", re.compile(r's([IVXLCDM]+)', re.IGNORECASE)),
+            ("S Roman", re.compile(r'(?<!\w)S([IVXLCDM]+)(?!\w)', re.IGNORECASE)),  # More specific pattern
 
             # 3-digit season numbers
-            ("S###", re.compile(r's(\d{3})', re.IGNORECASE)),
+            ("S###", re.compile(r'S(\d{3})', re.IGNORECASE)),
         ]
         return patterns
 
@@ -260,42 +292,29 @@ class TorrentParser:
         """Enhanced episode patterns based on Sonarr's parsing"""
         patterns = [
             # Standard episode patterns
-            ("EP #", re.compile(r'ep\s+(\d+)', re.IGNORECASE)),
-            ("EP ##", re.compile(r'ep\s+(\d{2})', re.IGNORECASE)),
-            ("EP #-#", re.compile(r'ep\s+(\d+)-(\d+)', re.IGNORECASE)),
-            ("EP ##-##", re.compile(r'ep\s+(\d{2})\s*-\s*(\d{2})', re.IGNORECASE)),
-            ("EP (##)", re.compile(r'ep\s*\((\d{2})\)', re.IGNORECASE)),
-            ("EP (##-##)", re.compile(r'ep\s*\((\d{2})-(\d{2})\)', re.IGNORECASE)),
+            ## All Range patterns are put first to make sure they get priority
+            # Number Episodes
+            ("## episodes", re.compile(r'\b(\d{1,3})\s+episodes\b', re.IGNORECASE)),
 
-            # Short episode patterns
-            ("EP#", re.compile(r'ep(\d+)', re.IGNORECASE)),
-            ("EP##", re.compile(r'ep(\d{2})', re.IGNORECASE)),
-            ("EP#-#", re.compile(r'ep(\d+)-(\d+)', re.IGNORECASE)),
-            ("EP##-##", re.compile(r'ep(\d{2})-(\d{2})', re.IGNORECASE)),
-
-            # Very short episode patterns
-            ("E#", re.compile(r'e(\d)\b', re.IGNORECASE)),
-            ("E##", re.compile(r'e(\d{2})', re.IGNORECASE)),
-            ("E#-#", re.compile(r'e(\d)-(\d)', re.IGNORECASE)),
-            ("E##-##", re.compile(r'e(\d{2})-(\d{2})', re.IGNORECASE)),
-            ("E#E#", re.compile(r'e(\d)e(\d)', re.IGNORECASE)),
-            ("E##E##", re.compile(r'e(\d{2})e(\d{2})', re.IGNORECASE)),
-            ("S#xE#", re.compile(r's(\d+)x[e]?(\d+)', re.IGNORECASE)),
-
-            # Multi-digit episode patterns
-            ("E#-#", re.compile(r'e(\d+)-(\d+)', re.IGNORECASE)),
-            ("E#-#", re.compile(r'(?<!x)e(\d+)-(\d+)', re.IGNORECASE)),
-            ("E##-##", re.compile(r'e(\d{2})-(\d{2})', re.IGNORECASE)),
-
-            # Full word episode patterns
-            ("Episode #", re.compile(r'episode\s+(\d+)', re.IGNORECASE)),
-            ("Episode ##", re.compile(r'episode\s+(\d{2})', re.IGNORECASE)),
             ("Episode #-#", re.compile(r'episode\s+(\d+)-(\d+)', re.IGNORECASE)),
             ("Episode # - #", re.compile(r'episode\s+(\d+)\s*-\s*(\d+)', re.IGNORECASE)),
             ("Episode ## - ##", re.compile(r'episode\s+(\d{2})\s*-\s*(\d{2})', re.IGNORECASE)),
             ("Episode ##-##", re.compile(r'episode\s+(\d{2})-(\d{2})', re.IGNORECASE)),
+            ("EP #-#", re.compile(r'ep\s+(\d+)-(\d+)', re.IGNORECASE)),
+            ("EP ##-##", re.compile(r'ep\s+(\d{2})\s*-\s*(\d{2})', re.IGNORECASE)),
+            ("EP (##-##)", re.compile(r'ep\s*\((\d{2})-(\d{2})\)', re.IGNORECASE)),
+            ("EP#-#", re.compile(r'ep(\d+)-(\d+)', re.IGNORECASE)),
+            ("EP##-##", re.compile(r'ep(\d{2})-(\d{2})', re.IGNORECASE)),
+            ("E#-#", re.compile(r'e(\d)-(\d)', re.IGNORECASE)),
+            ("E##-##", re.compile(r'e(\d{2})-(\d{2})', re.IGNORECASE)),
+            ("E#E#", re.compile(r'e(\d)e(\d)', re.IGNORECASE)),
+            ("E##E##", re.compile(r'e(\d{2})e(\d{2})', re.IGNORECASE)),
+             # Multi-digit episode patterns
+            ("E#-#", re.compile(r'e(\d+)-(\d+)', re.IGNORECASE)),
+            ("E#-#", re.compile(r'(?<!x)e(\d+)-(\d+)', re.IGNORECASE)),
+            ("E##-##", re.compile(r'e(\d{2})-(\d{2})', re.IGNORECASE)),
 
-            # Multi-episode patterns
+            # Multi-episode patterns - FIXED: Added flexible spacing and dash patterns
             ("Episodes # - #", re.compile(r'episodes\s+(\d+)\s*-\s*(\d+)', re.IGNORECASE)),
             ("Episodes ## - ##", re.compile(r'episodes\s+(\d{2})\s*-\s*(\d{2})', re.IGNORECASE)),
             ("Episodes #-#", re.compile(r'episodes\s+(\d+)-(\d+)', re.IGNORECASE)),
@@ -308,6 +327,32 @@ class TorrentParser:
             ("Ep ## to ##", re.compile(r'ep\s+(\d{2})\s+to\s+(\d{2})', re.IGNORECASE)),
             ("E# to E#", re.compile(r'e(\d)\s+to\s+e(\d)', re.IGNORECASE)),
             ("E## to E##", re.compile(r'e(\d{2})\s+to\s+e(\d{2})', re.IGNORECASE)),
+
+            ("EP #", re.compile(r'ep\s+(\d+)', re.IGNORECASE)),
+            ("EP ##", re.compile(r'ep\s+(\d{2})', re.IGNORECASE)),
+
+            ("EP (##)", re.compile(r'ep\s*\((\d{2})\)', re.IGNORECASE)),
+
+
+            # Short episode patterns
+            ("EP#", re.compile(r'ep(\d+)', re.IGNORECASE)),
+            ("EP##", re.compile(r'ep(\d{2})', re.IGNORECASE)),
+
+
+            # Very short episode patterns
+            ("E#", re.compile(r'e(\d)\b', re.IGNORECASE)),
+            ("E##", re.compile(r'e(\d{2})', re.IGNORECASE)),
+
+            ("S#xE#", re.compile(r's(\d+)x[e]?(\d+)', re.IGNORECASE)),
+
+
+
+            # Full word episode patterns
+            ("Episode #", re.compile(r'episode\s+(\d+)', re.IGNORECASE)),
+            ("Episode ##", re.compile(r'episode\s+(\d{2})', re.IGNORECASE)),
+
+
+
 
             # Special episode types - FIXED PATTERN
             ("Complete Episodes", re.compile(r'complete[-_. ]+episodes', re.IGNORECASE)),
@@ -347,8 +392,7 @@ class TorrentParser:
             ("E###", re.compile(r'e(\d{3})', re.IGNORECASE)),
             ("EP###", re.compile(r'ep(\d{3})', re.IGNORECASE)),
 
-            # Number Episodes
-            ("## episodes", re.compile(r'\b(\d{1,3})\s+episodes\b', re.IGNORECASE)),
+
 
             # Split episodes
             ("Split E#", re.compile(r'e(\d+)([a-d])', re.IGNORECASE)),
@@ -370,30 +414,82 @@ class TorrentParser:
         ]
         return patterns
 
+
+    def _is_likely_year_range(self, num1: str, num2: str, position: int, normalized_title: str) -> bool:
+        """Check if a number range is likely to be years rather than episodes"""
+        # If both numbers are 4 digits and in reasonable year range, it's probably years
+        if (len(num1) == 4 and len(num2) == 4 and
+            num1.isdigit() and num2.isdigit() and
+            1900 <= int(num1) <= datetime.now().year + 1 and
+            1900 <= int(num2) <= datetime.now().year + 1):
+            return True
+
+        # Check if numbers look like years (19xx or 20xx)
+        year_pattern = re.compile(r'^(19|20)\d{2}$')
+        if year_pattern.match(num1) and year_pattern.match(num2):
+            return True
+
+        # Only consider it a potential year range if both numbers are at least 3 digits
+        # This prevents 2-digit episode numbers like "03-04" from being flagged as years
+        if len(num1) < 3 or len(num2) < 3:
+            return False
+
+        # Check context around the match
+        context_start = max(0, position - 20)
+        context_end = min(len(normalized_title), position + len(num1) + len(num2) + 20)
+        context = normalized_title[context_start:context_end].lower()
+
+        # Year indicators in context
+        year_indicators = ['year', 'aired', 'released', 'broadcast', '©', '(c)']
+        if any(indicator in context for indicator in year_indicators):
+            return True
+
+        # If the numbers are immediately preceded by episode indicators, it's probably episodes
+        episode_indicators = ['episode', 'ep', 'e', 'part', 'chapter', 'episodes']
+        episode_context = normalized_title[max(0, position-10):position].lower()
+        if any(indicator in episode_context for indicator in episode_indicators):
+            return False
+
+        return False
+
+
+    # Update the parse_episode method to fix range detection issues
     def parse_episode(self, title: str) -> Optional[str]:
         """Enhanced episode parsing with better exclusion logic"""
         normalized_title = self._normalize_title(title)
         episode_matches = []
+        #(f"DEBUG: Normalized title: {normalized_title}")  # DEBUG
 
         # Extract potential false positives to exclude
-        years = re.findall(r'\b(19|20)\d{2}\b', normalized_title)
+        years = re.findall(r'\b(19\d{2}|20\d{2})\b', normalized_title)
         resolutions = re.findall(r'\b(360|480|720|1080|1440|2160|4K)p?\b', normalized_title, re.IGNORECASE)
         file_sizes = re.findall(r'\b\d+\.?\d*[GMK]B\b', normalized_title, re.IGNORECASE)
         video_codecs = re.findall(r'\b(HEVC|AVC|AV1|XviD|DivX|VP9|h264|h265)\b', normalized_title, re.IGNORECASE)
+        audio_codecs = re.findall(r'\b(AAC|AC3|DTS|DDP|EAC3|TrueHD|Atmos|MP3|FLAC|Opus|PCM|Vorbis)\b', normalized_title, re.IGNORECASE)
 
         exclude_numbers = set()
         exclude_numbers.update(years)
         exclude_numbers.update(resolutions)
+
+        # DEBUG: Track ALL patterns that match
+        all_matches = []
 
         for size in file_sizes:
             num_match = re.search(r'(\d+\.?\d*)', size)
             if num_match:
                 exclude_numbers.add(num_match.group(1))
 
-        for codec in video_codecs:
+        for codec in video_codecs + audio_codecs:
             num_match = re.search(r'(\d+)', codec)
             if num_match:
                 exclude_numbers.add(num_match.group(1))
+
+        # Additional exclusion: numbers that are part of audio codec patterns
+        audio_numbers = re.findall(r'(?:AAC|AC|DD|DDP|EAC)(\d+\.?\d*)', normalized_title, re.IGNORECASE)
+        exclude_numbers.update(audio_numbers)
+
+        # DEBUG: Show what numbers are being excluded
+        print(f"DEBUG: exclude_numbers: {exclude_numbers}")
 
         # Check for special episodes first
         for pattern_name, pattern in self.special_episode_patterns:
@@ -418,54 +514,215 @@ class TorrentParser:
         if found_complete_pattern:
             return ", ".join(episode_matches) if episode_matches else None
 
+        # Parse season information first to determine season context
+        season_info = self.parse_season(title)
+        season_numbers = set()
+
+        if season_info:
+            print(f"DEBUG: Season info: {season_info}")
+            # Extract season numbers from season_info
+            season_matches = re.findall(r'S(\d+)', season_info)
+            for num in season_matches:
+                season_numbers.add(num)
+            print(f"DEBUG: Season numbers: {season_numbers}")
+
+        # Define range patterns and their priorities (higher number = higher priority)
+        range_patterns = {
+            # Episode ranges with high priority
+            "Episodes # - #": 15,  # Highest priority for explicit episode ranges
+            "Episodes ## - ##": 15,
+            "Episodes #-#": 15,
+            "Episodes ##-##": 15,
+            "Episodes # to #": 15,
+            "Episodes ## to ##": 15,
+
+            # Episode ranges with medium priority
+            "Episode #-#": 10,
+            "Episode # - #": 10,
+            "Episode ## - ##": 10,
+            "Episode ##-##": 10,
+
+            # Short episode ranges
+            "EP #-#": 8,
+            "EP ##-##": 8,
+            "EP (##-##)": 8,
+            "EP#-#": 8,
+            "EP##-##": 8,
+            "E#-#": 8,
+            "E##-##": 8,
+            "E#E#": 8,
+            "E##E##": 8,
+
+            # Other range patterns
+            "Ep # to #": 6,
+            "Ep ## to ##": 6,
+            "E# to E#": 6,
+            "E## to E##": 6
+        }
+
+        # Define episode count patterns with lower priority than explicit ranges
+        episode_count_patterns = {
+            "## episodes": 5  # Lower priority than explicit episode ranges
+        }
+
+        # Track all potential episode matches with their priorities
+        potential_matches = {}
+
         # SECOND: Parse individual episodes only if no complete pattern was found
         for pattern_name, pattern in self.episode_patterns:
             # Skip complete patterns since we already checked them
             if pattern_name in complete_patterns:
                 continue
 
-            matches = pattern.finditer(normalized_title)
+            matches = list(pattern.finditer(normalized_title))
+
+            if matches:
+                print(f"DEBUG: Pattern '{pattern_name}' has {len(matches)} matches")
+                for match in matches:
+                    all_matches.append((pattern_name, match.group(0), match.groups()))
+                    print(f"DEBUG:   Match: '{match.group(0)}' -> groups: {match.groups()}")
+
             for match in matches:
-                if pattern_name == "## episodes":
-                    episode_count = match.group(1)
-                    if episode_count not in exclude_numbers and episode_count.isdigit():
-                        count = int(episode_count)
-                        if 1 <= count <= 200:
-                            episode_matches.append(f"E1-E{count}")
-                elif pattern_name == "Split E#":
+                # Determine if this is an episode pattern based on the pattern name
+                is_episode_pattern = (
+                    pattern_name in range_patterns or
+                    pattern_name in episode_count_patterns or
+                    "episode" in pattern_name.lower() or
+                    "ep" in pattern_name.lower()
+                )
+
+                # For episode patterns, we don't need to check season context
+                if is_episode_pattern:
+                    print(f"DEBUG: Processing episode pattern: {pattern_name}")
+
+                    # Handle episode count patterns (lower priority than explicit ranges)
+                    if pattern_name in episode_count_patterns:
+                        episode_count = match.group(1)
+                        # Check if this number is in season_numbers (indicating it's a season, not episode count)
+                        if episode_count in season_numbers:
+                            print(f"DEBUG: Skipping episode count pattern {episode_count} as it matches a season number")
+                            continue
+
+                        if episode_count not in exclude_numbers and episode_count.isdigit():
+                            count = int(episode_count)
+                            if 1 <= count <= 200:
+                                priority = episode_count_patterns[pattern_name]
+                                match_key = f"E1-E{count}"
+                                if match_key not in potential_matches or priority > potential_matches[match_key][1]:
+                                    potential_matches[match_key] = (match.group(0), priority)
+                                    print(f"DEBUG: Added episode count with priority {priority}: {match_key}")
+                        continue
+
+                    # Handle range patterns
+                    if pattern_name in range_patterns:
+                        priority = range_patterns[pattern_name]
+
+                        # For patterns with 2 groups (range patterns)
+                        if len(match.groups()) >= 2:
+                            ep1, ep2 = match.group(1), match.group(2)
+                            print(f"DEBUG: Range values: ep1={ep1}, ep2={ep2}")
+
+                            # Check if this is likely a year range first
+                            if self._is_likely_year_range(ep1, ep2, match.start(1), normalized_title):
+                                print(f"DEBUG: Skipping year range: {ep1}-{ep2}")
+                                continue
+
+                            # Check if numbers should be excluded
+                            ep1_excluded = ep1 in exclude_numbers
+                            ep2_excluded = ep2 in exclude_numbers
+
+                            if ep1_excluded or ep2_excluded:
+                                print(f"DEBUG: Range {ep1}-{ep2} excluded - ep1_excluded: {ep1_excluded}, ep2_excluded: {ep2_excluded}")
+                                continue
+
+                            # Validate as episode range
+                            if (ep1.isdigit() and ep2.isdigit() and
+                                int(ep1) <= 200 and int(ep2) <= 200 and
+                                int(ep1) > 0 and int(ep2) > 0):
+                                match_key = f"E{ep1.zfill(2)}-E{ep2.zfill(2)}"
+                                if match_key not in potential_matches or priority > potential_matches[match_key][1]:
+                                    potential_matches[match_key] = (match.group(0), priority)
+                                    print(f"DEBUG: Added range with priority {priority}: {match_key}")
+                            else:
+                                print(f"DEBUG: Range validation failed for {ep1}-{ep2}")
+                                #pass
+                        else:
+                            print(f"DEBUG: Range pattern {pattern_name} has {len(match.groups())} groups, expected at least 2")
+                            #pass
+
+                        continue  # Skip further processing for range patterns
+
+                # For non-episode patterns, check if it's a season number
+                episode_num = None
+                if match.groups():
+                    episode_num = match.group(1)  # Get the first captured group
+
+                if episode_num and self._is_likely_season_context(episode_num, match.start(1), normalized_title):
+                    print(f"DEBUG: Skipping season number: {episode_num}")
+                    continue  # Skip season numbers
+
+                # Process single episode patterns
+                if pattern_name == "Split E#":
                     episode_num = match.group(1)
                     split_char = match.group(2)
                     if episode_num not in exclude_numbers:
                         episode_matches.append(f"E{episode_num}{split_char}")
+
                 elif pattern_name == "Part One":
                     part_name = match.group(1).lower()
                     part_map = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-                            "six": 6, "seven": 7, "eight": 8, "nine": 9}
+                                "six": 6, "seven": 7, "eight": 8, "nine": 9}
                     if part_name in part_map:
                         episode_matches.append(f"Part{part_map[part_name]}")
+
                 elif pattern_name == "XofY":
                     episode_num = match.group(1)
                     if episode_num not in exclude_numbers:
                         episode_matches.append(f"E{episode_num}")
+
                 elif len(match.groups()) == 1:
                     episode_num = match.group(1)
-                    if episode_num not in exclude_numbers and episode_num.isdigit():
-                        if int(episode_num) <= 200:
-                            episode_matches.append(f"E{episode_num.zfill(2)}")
+                    if (episode_num not in exclude_numbers and episode_num.isdigit() and
+                        int(episode_num) <= 200 and not self._is_in_audio_context(episode_num, match.start(1), normalized_title)):
+                        episode_matches.append(f"E{episode_num.zfill(2)}")
+                        print(f"DEBUG: Added single episode: E{episode_num.zfill(2)}")
+
                 elif len(match.groups()) == 2:
-                    ep1, ep2 = match.group(1), match.group(2)
-                    if ep1 not in exclude_numbers and ep2 not in exclude_numbers:
-                        if ep1.isdigit() and ep2.isdigit() and int(ep1) <= 200 and int(ep2) <= 200:
+                    # Only process if not already handled as a range pattern
+                    if pattern_name not in range_patterns:
+                        ep1, ep2 = match.group(1), match.group(2)
+                        if (ep1 not in exclude_numbers and ep2 not in exclude_numbers and
+                            ep1.isdigit() and ep2.isdigit() and
+                            int(ep1) <= 200 and int(ep2) <= 200):
                             episode_matches.append(f"E{ep1.zfill(2)}-E{ep2.zfill(2)}")
+                            print(f"DEBUG: Added range from 2-group pattern: E{ep1.zfill(2)}-E{ep2.zfill(2)}")
+
                 elif len(match.groups()) == 3:
-                    ep1, ep2 = match.group(2), match.group(3)
-                    if ep1 not in exclude_numbers and ep2 not in exclude_numbers:
-                        if ep1.isdigit() and ep2.isdigit() and int(ep1) <= 200 and int(ep2) <= 200:
+                    # Only process if not already handled as a range pattern
+                    if pattern_name not in range_patterns:
+                        ep1, ep2 = match.group(2), match.group(3)
+                        if (ep1 not in exclude_numbers and ep2 not in exclude_numbers and
+                            ep1.isdigit() and ep2.isdigit() and
+                            int(ep1) <= 200 and int(ep2) <= 200):
                             episode_matches.append(f"E{ep1.zfill(2)}-E{ep2.zfill(2)}")
+                            print(f"DEBUG: Added range from 3-group pattern: E{ep1.zfill(2)}-E{ep2.zfill(2)}")
+
                 elif pattern_name.startswith("Absolute"):
                     abs_num = match.group(1)
-                    if abs_num not in exclude_numbers and abs_num.isdigit() and int(abs_num) <= 2000:
-                        episode_matches.append(f"Abs{abs_num.zfill(3)}")
+                    if (abs_num not in exclude_numbers and abs_num.isdigit() and
+                        int(abs_num) <= 2000 and not self._is_in_audio_context(abs_num, match.start(1), normalized_title)):
+                        # Only add if we don't have any higher priority matches
+                        if not potential_matches:
+                            episode_matches.append(f"Abs{abs_num.zfill(3)}")
+                            print(f"DEBUG: Added absolute episode: Abs{abs_num.zfill(3)}")
+
+        # Add the highest priority potential matches to the episode_matches
+        if potential_matches:
+            # Sort by priority (highest first)
+            sorted_matches = sorted(potential_matches.items(), key=lambda x: x[1][1], reverse=True)
+            for match_key, (match_text, priority) in sorted_matches:
+                episode_matches.append(match_key)
+                print(f"DEBUG: Added high priority match: {match_key} (priority: {priority})")
 
         # Check for date-based episodes
         date_patterns = [
@@ -480,19 +737,180 @@ class TorrentParser:
                 if len(match) == 3:
                     episode_matches.append(f"Date:{match[0]}-{match[1]}-{match[2]}")
 
+        print(f"DEBUG: All matches found: {all_matches}")
+        print(f"DEBUG: Potential matches: {potential_matches}")
+        print(f"DEBUG: Final episode matches: {episode_matches}")
         return ", ".join(episode_matches) if episode_matches else None
 
-    def parse_season(self, title: str) -> Optional[str]:
-        """Enhanced season parsing with better exclusion logic"""
-        normalized_title = self._normalize_title(title)
-        season_matches = []
 
-        # Extract potential years to exclude from season parsing
+
+
+
+
+
+    # Add this helper method to detect audio context
+    def _is_in_audio_context(self, number: str, position: int, normalized_title: str) -> bool:
+        """Check if a number is in audio codec context"""
+        context_start = max(0, position - 10)
+        context_end = min(len(normalized_title), position + len(number) + 10)
+        context = normalized_title[context_start:context_end].lower()
+
+        audio_indicators = ['aac', 'ac', 'dd', 'ddp', 'eac', 'dts', 'truehd', 'atmos', '5.1', '7.1', '2.0']
+
+        return any(indicator in context for indicator in audio_indicators)
+
+
+    def _is_likely_season_context(self, number: str, position: int, normalized_title: str) -> bool:
+        """Check if a number at a specific position is in season context"""
+        # Look at the text around the number to determine context
+        context_start = max(0, position - 20)
+        context_end = min(len(normalized_title), position + len(number) + 20)
+        context = normalized_title[context_start:context_end].lower()
+
+        # Season indicators
+        season_indicators = ['season', 'saison', 'temporada', 'stagione', 'complete', 'full', 'pack']
+        # Episode indicators (if these are present, it's probably an episode)
+        episode_indicators = ['episode', 'ep', 'e', 'chapter', 'part', 'eps']
+        # False positive contexts (numbers that should NOT be episodes)
+        false_positive_indicators = ['gb', 'mb', 'movies', 'movie', 'collection', 'collections', 'size', 'hr', 'min']
+
+        has_season_indicator = any(indicator in context for indicator in season_indicators)
+        has_episode_indicator = any(indicator in context for indicator in episode_indicators)
+        has_false_positive = any(indicator in context for indicator in false_positive_indicators)
+
+        # If it's clearly an episode context, return False immediately
+        if has_episode_indicator:
+            # Check if the number is immediately after an episode indicator
+            preceding_text = normalized_title[max(0, position - 15):position].lower().strip()
+
+            # Check if the number is part of a pattern like "episode X", "ep X", "episodes X-Y", etc.
+            if (preceding_text.endswith(('episode ', 'ep ', 'e ', 'episodes ')) or
+                'episode ' in preceding_text or 'ep ' in preceding_text or
+                'episodes ' in preceding_text):
+                return False  # It's an episode, not a season
+
+        # If it's clearly a season context with no episode indicators
+        if has_season_indicator and not has_episode_indicator:
+            # Additional check: if the number is immediately after "season" or "s"
+            preceding_text = normalized_title[max(0, position - 10):position].lower().strip()
+
+            if (preceding_text.endswith(('season ', 'saison ', 'temporada ', 'stagione ')) or
+                (preceding_text.endswith('s ') and not preceding_text.endswith(('eps ', 'ep ')))):
+                return True  # It's a season, not an episode
+
+        # If it's in a false positive context (filesize, movie count, etc.)
+        if has_false_positive and not has_episode_indicator:
+            return True
+
+        # Additional check: if the number is immediately after "season" or "s"
+        if position > 0:
+            preceding_text = normalized_title[max(0, position - 10):position].lower().strip()
+            following_text = normalized_title[position + len(number):min(len(normalized_title), position + len(number) + 10)].lower()
+
+            # Check if preceded by season indicators
+            if (preceding_text.endswith(('season', 'saison', 'temporada', 'stagione')) or
+                (preceding_text.endswith('s') and not preceding_text.endswith(('eps', 'ep')))):
+                return True
+
+            # Check if followed by filesize indicators
+            if following_text.startswith(('.gb', 'gb', '.mb', 'mb', 'movies', 'movie')):
+                return True
+
+        return False
+
+    def parse_season(self, title: str) -> Optional[str]:
+        """Enhanced season parsing with better exclusion logic and priority handling"""
+        normalized_title = self._normalize_title(title)
+
+        # Extract potential false positives to exclude from season parsing
         years = re.findall(r'\b(19|20)\d{2}\b', normalized_title)
         resolutions = re.findall(r'\b(360|480|720|1080|1440|2160|4K)p?\b', normalized_title, re.IGNORECASE)
+        file_sizes = re.findall(r'\b\d+\.?\d*[GMK]B\b', normalized_title, re.IGNORECASE)
+        video_codecs = re.findall(r'\b(HEVC|AVC|AV1|XviD|DivX|VP9|h264|h265)\b', normalized_title, re.IGNORECASE)
+        audio_codecs = re.findall(r'\b(AAC|AC3|DTS|DDP|EAC3|TrueHD|Atmos|MP3|FLAC|Opus|PCM|Vorbis)\b', normalized_title, re.IGNORECASE)
 
         exclude_numbers = set(years)
         exclude_numbers.update(resolutions)
+
+        for size in file_sizes:
+            num_match = re.search(r'(\d+\.?\d*)', size)
+            if num_match:
+                exclude_numbers.add(num_match.group(1))
+
+        for codec in video_codecs + audio_codecs:
+            num_match = re.search(r'(\d+)', codec)
+            if num_match:
+                exclude_numbers.add(num_match.group(1))
+
+        # Define season pattern priorities (higher number = higher priority)
+        season_priorities = {
+            # Highest priority: Specific season number patterns
+            "Season #": 30,
+            "Season ##": 30,
+            "S#": 30,
+            "S##": 30,
+            "S###": 30,
+            "S####": 30,
+
+            # High priority: Season range patterns with valid increments
+            "Season #-#": 25,
+            "Season ##-##": 25,
+            "S#-#": 25,
+            "S##-##": 25,
+            "Season #-Season #": 25,
+            "Season ##-Season ##": 25,
+            "S#-S#": 25,
+            "S##-S##": 25,
+            "Season # to #": 25,
+            "S# to #": 25,
+
+            # Medium-high priority: Multi-season patterns
+            "Season list": 20,
+            "S list": 20,
+            "S+S+S list": 20,
+
+            # Medium priority: Complete season patterns with numbers
+            "Season # Complete": 15,
+            "Season ## Complete": 15,
+            "S# Complete": 15,
+            "S## Complete": 15,
+            "Complete S#": 15,
+            "Complete S##": 15,
+            "Complete S#-S#": 15,
+            "Complete S##-S##": 15,
+
+            # Low-medium priority: General complete season patterns
+            "Complete Season": 10,
+            "Complete Seasons": 10,
+            "Full Season": 10,
+            "Season Pack": 10,
+            "All Seasons": 10,
+            "All Season": 10,
+            "Full S#": 10,
+            "Full S##": 10,
+
+            # Low priority: Other patterns
+            "Season # Part #": 5,
+            "S# Part #": 5,
+            "Season # Vol #": 5,
+            "Season # (####)": 5,
+            "S#xE#": 5,
+            "S#xE#-#": 5,
+
+            # Lowest priority: Roman numeral seasons (less common)
+            "Season Roman": 3,
+            "S Roman": 3,
+
+            # Multi-language patterns
+            "Stagione #": 12,
+            "Stagioni #-#": 12,
+            "Temporada #": 12,
+            "Temporadas #-#": 12,
+            "Saison #": 12,
+        }
+
+        # Track all potential season matches with their priorities and match positions
+        potential_matches = {}
 
         # First pass: check for complex patterns
         complex_pattern_ranges = []
@@ -505,6 +923,7 @@ class TorrentParser:
         # Second pass: parse all patterns
         for pattern_name, pattern in self.season_patterns:
             matches = pattern.finditer(normalized_title)
+
             for match in matches:
                 # Skip simple patterns if they overlap with complex patterns
                 match_start, match_end = match.start(), match.end()
@@ -512,48 +931,80 @@ class TorrentParser:
                     any(start <= match_start < end for start, end in complex_pattern_ranges)):
                     continue
 
+                # Get the priority for this pattern
+                priority = season_priorities.get(pattern_name, 1)
+
+                # Debug logging
+                print(f"DEBUG: Season pattern '{pattern_name}' matched: '{match.group()}' at position {match_start}")
+
                 if pattern_name in ["Complete Season", "Complete Seasons", "Full Season", "Season Pack",
                                 "All Seasons", "All Season"]:
-                    season_matches.append(pattern_name)
+                    # For general patterns, just add the pattern name
+                    match_key = pattern_name
+                    if match_key not in potential_matches or priority > potential_matches[match_key][1]:
+                        potential_matches[match_key] = (match.group(0), priority, match_start)
+                        print(f"DEBUG: Added general season pattern: {match_key} with priority {priority}")
 
                 elif pattern_name in ["Season list", "S list"]:
                     season_text = match.group(1)
                     season_numbers = re.findall(r'\d+', season_text)
-                    season_numbers = [int(num) for num in season_numbers if num not in exclude_numbers]
+                    season_numbers = [int(num) for num in season_numbers if str(num) not in exclude_numbers]
 
                     if season_numbers:
                         min_season = min(season_numbers)
                         max_season = max(season_numbers)
                         if 1 <= min_season <= 50 and 1 <= max_season <= 50:
-                            season_matches.append(f"S{min_season:02d}-S{max_season:02d}")
+                            if min_season != max_season:  # Only add if it's a valid range
+                                match_key = f"S{min_season:02d}-S{max_season:02d}"
+                                if match_key not in potential_matches or priority > potential_matches[match_key][1]:
+                                    potential_matches[match_key] = (match.group(0), priority, match_start)
+                                    print(f"DEBUG: Added season list range: {match_key} with priority {priority}")
+                            else:
+                                match_key = f"S{min_season:02d}"
+                                if match_key not in potential_matches or priority > potential_matches[match_key][1]:
+                                    potential_matches[match_key] = (match.group(0), priority, match_start)
+                                    print(f"DEBUG: Added season list single: {match_key} with priority {priority}")
 
                 elif pattern_name == "S+S+S list":
                     season_text = match.group(1).lower()
                     season_numbers = re.findall(r's(?:eason)?\s*(\d+)', season_text)
-                    season_numbers = [int(num) for num in season_numbers if num not in exclude_numbers]
+                    season_numbers = [int(num) for num in season_numbers if str(num) not in exclude_numbers]
 
                     if season_numbers:
                         min_season = min(season_numbers)
                         max_season = max(season_numbers)
                         if 1 <= min_season <= 50 and 1 <= max_season <= 50:
-                            if len(season_numbers) > 1:
-                                season_matches.append(f"S{min_season:02d}-S{max_season:02d}")
+                            if len(season_numbers) > 1 and min_season != max_season:  # Only add if it's a valid range
+                                match_key = f"S{min_season:02d}-S{max_season:02d}"
+                                if match_key not in potential_matches or priority > potential_matches[match_key][1]:
+                                    potential_matches[match_key] = (match.group(0), priority, match_start)
+                                    print(f"DEBUG: Added S+S+S list range: {match_key} with priority {priority}")
                             else:
-                                season_matches.append(f"S{min_season:02d}")
+                                match_key = f"S{min_season:02d}"
+                                if match_key not in potential_matches or priority > potential_matches[match_key][1]:
+                                    potential_matches[match_key] = (match.group(0), priority, match_start)
+                                    print(f"DEBUG: Added S+S+S list single: {match_key} with priority {priority}")
 
                 elif pattern_name in ["Season # to #", "S# to #"]:
                     s1, s2 = int(match.group(1)), int(match.group(2))
                     if str(s1) not in exclude_numbers and str(s2) not in exclude_numbers:
                         if 1 <= s1 <= 50 and 1 <= s2 <= 50:
                             min_season, max_season = min(s1, s2), max(s1, s2)
-                            season_matches.append(f"S{min_season:02d}-S{max_season:02d}")
+                            if min_season != max_season:  # Only add if it's a valid range
+                                match_key = f"S{min_season:02d}-S{max_season:02d}"
+                                if match_key not in potential_matches or priority > potential_matches[match_key][1]:
+                                    potential_matches[match_key] = (match.group(0), priority, match_start)
+                                    print(f"DEBUG: Added 'to' range: {match_key} with priority {priority}")
 
                 elif pattern_name == "Season Roman":
                     roman_num = match.group(1)
                     try:
                         season_num = self._roman_to_int(roman_num)
                         if 1 <= season_num <= 50:
-                            season_matches.append(f"S{season_num:02d}")
+                            match_key = f"S{season_num:02d}"
+                            if match_key not in potential_matches or priority > potential_matches[match_key][1]:
+                                potential_matches[match_key] = (match.group(0), priority, match_start)
+                                print(f"DEBUG: Added Roman season: {match_key} with priority {priority}")
                     except ValueError:
                         pass
 
@@ -562,22 +1013,73 @@ class TorrentParser:
                     try:
                         season_num = self._roman_to_int(roman_num)
                         if 1 <= season_num <= 50:
-                            season_matches.append(f"S{season_num:02d}")
+                            match_key = f"S{season_num:02d}"
+                            if match_key not in potential_matches or priority > potential_matches[match_key][1]:
+                                potential_matches[match_key] = (match.group(0), priority, match_start)
+                                print(f"DEBUG: Added Roman S season: {match_key} with priority {priority}")
                     except ValueError:
                         pass
 
                 elif len(match.groups()) == 1:
                     season_num = match.group(1)
                     if season_num not in exclude_numbers:
-                        season_matches.append(f"S{season_num.zfill(2)}")
+                        match_key = f"S{season_num.zfill(2)}"
+                        if match_key not in potential_matches or priority > potential_matches[match_key][1]:
+                            potential_matches[match_key] = (match.group(0), priority, match_start)
+                            print(f"DEBUG: Added single season: {match_key} with priority {priority}")
 
                 elif len(match.groups()) == 2:
                     s1, s2 = match.group(1), match.group(2)
                     if s1 not in exclude_numbers and s2 not in exclude_numbers:
                         if int(s1) <= 50 and int(s2) <= 50:
-                            season_matches.append(f"S{s1.zfill(2)}-S{s2.zfill(2)}")
+                            # Only add if it's a valid range (different numbers)
+                            if s1 != s2:
+                                match_key = f"S{s1.zfill(2)}-S{s2.zfill(2)}"
+                                if match_key not in potential_matches or priority > potential_matches[match_key][1]:
+                                    potential_matches[match_key] = (match.group(0), priority, match_start)
+                                    print(f"DEBUG: Added 2-group range: {match_key} with priority {priority}")
+                            else:
+                                # If it's the same number, treat it as a single season
+                                match_key = f"S{s1.zfill(2)}"
+                                if match_key not in potential_matches or priority > potential_matches[match_key][1]:
+                                    potential_matches[match_key] = (match.group(0), priority, match_start)
+                                    print(f"DEBUG: Added 2-group single: {match_key} with priority {priority}")
 
-        return ", ".join(season_matches) if season_matches else None
+        # Sort potential matches by priority (highest first), then by position (earlier first)
+        sorted_matches = sorted(potential_matches.items(), key=lambda x: (x[1][1], x[1][2]), reverse=True)
+
+        # Extract the match keys in order of priority
+        season_matches = []
+        seen_seasons = set()
+
+        for match_key, (match_text, priority, position) in sorted_matches:
+            # Extract season numbers from the match key
+            if "-" in match_key:  # It's a range
+                season_nums = re.findall(r'S(\d+)', match_key)
+                for num in season_nums:
+                    if num not in seen_seasons:
+                        seen_seasons.add(num)
+            else:  # It's a single season or a general pattern
+                season_match = re.search(r'S(\d+)', match_key)
+                if season_match:
+                    season_num = season_match.group(1)
+                    if season_num not in seen_seasons:
+                        seen_seasons.add(season_num)
+
+            season_matches.append(match_key)
+            print(f"DEBUG: Final season match: {match_key}")
+
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_season_matches = []
+        for match in season_matches:
+            if match not in seen:
+                seen.add(match)
+                unique_season_matches.append(match)
+
+        result = ", ".join(unique_season_matches) if unique_season_matches else None
+        print(f"DEBUG: Final season result: {result}")
+        return result
 
     def _roman_to_int(self, s: str) -> int:
         """Convert Roman numeral to integer"""
@@ -1225,14 +1727,19 @@ class TorrentParser:
 
         return anime_info if anime_info else None
 
+    # Update the parse method to include content type detection
     def parse(self, title: str) -> Dict[str, Any]:
         """Parse all components from torrent title"""
         if not self._is_valid_title(title):
             return {"error": "Invalid title (likely hashed release)"}
 
+        normalized_title = self._normalize_title(title)
+        content_type = self._detect_content_type(title, normalized_title)
+
         result = {
             "original_title": title,
-            "normalized_title": self._normalize_title(title),
+            "normalized_title": normalized_title,
+            "content_type": content_type,
             "season": self.parse_season(title),
             "episode": self.parse_episode(title),
             "resolution": self.parse_resolution(title),
@@ -1249,6 +1756,11 @@ class TorrentParser:
             "anime_info": self.parse_anime_info(title),
         }
 
+        # If content is movie, remove season and episode
+        if content_type == "movie":
+            result.pop("season", None)
+            result.pop("episode", None)
+
         # Clean up None values
         result = {k: v for k, v in result.items() if v is not None}
 
@@ -1259,11 +1771,13 @@ class TorrentParser:
         return [self.parse(title) for title in titles]
 
 
+# Update the post_process_result function to better handle ranges
 def post_process_result(result):
     """Post-process the result to deduplicate and keep highest ranges"""
     processed = {
     "INPUT": result.get("original_title", ""),
     "normalized_title": result.get("normalized_title", ""),
+    "content_type": result.get("content_type", "series"),
     "season": None,
     "episode": None
     }
@@ -1274,15 +1788,45 @@ def post_process_result(result):
         if season_value:
             processed["season"] = _process_season_episode_field(season_value)
 
-    # Process episode field
+    # Process episode field - prioritize ranges over single episodes
     if "episode" in result:
         episode_value = result["episode"]
         if episode_value:
-            processed["episode"] = _process_season_episode_field(episode_value)
+            # Split by comma and strip whitespace
+            values = [v.strip() for v in episode_value.split(",")]
+
+            # Look for ranges first
+            ranges = [v for v in values if '-' in v and v.startswith('E')]
+            if ranges:
+                # Pick the range with the widest span
+                best_range = None
+                max_span = -1
+
+                for range_val in ranges:
+                    if range_val.count('-') == 1:
+                        parts = range_val.split('-')
+                        if len(parts) == 2 and parts[0].startswith('E') and parts[1].startswith('E'):
+                            try:
+                                start = int(parts[0][1:])  # Extract number after 'E'
+                                end = int(parts[1][1:])    # Extract number after 'E'
+                                span = end - start
+
+                                if span > max_span:
+                                    max_span = span
+                                    best_range = range_val
+                            except ValueError:
+                                continue
+
+                if best_range and max_span > 0:
+                    processed["episode"] = best_range
+                else:
+                    processed["episode"] = _process_season_episode_field(episode_value)
+            else:
+                processed["episode"] = _process_season_episode_field(episode_value)
 
     # Add other fields if they exist
     for key, value in result.items():
-        if key not in ["INPUT", "normalized_title", "season", "episode", "original_title"]:
+        if key not in ["INPUT", "normalized_title", "season", "episode", "original_title", "content_type"]:
             processed[key] = value
 
     return processed
@@ -1295,6 +1839,9 @@ def _process_season_episode_field(field_value):
 
     # Split by comma and strip whitespace
     values = [v.strip() for v in field_value.split(",")]
+
+    if len(values) == 1:
+        return values[0]
 
     from collections import Counter
     value_counts = Counter(values)
@@ -1409,6 +1956,14 @@ def main():
         print(f"Original: {title}")
         result = parser.parse(title)
         processed_result = post_process_result(result)
+
+
+        # DEBUG: Show raw result before post-processing
+        print("RAW RESULT (before post-processing):")
+        for key, value in result.items():
+            if value:  # Only show non-empty values
+                print(f"  {key}: {value}")
+
 
         # Print human-readable
         print("Parsed result:")
