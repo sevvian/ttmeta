@@ -1868,10 +1868,19 @@ class TorrentParser:
     def remove_metadata(self, title):
         """
         Removes metadata from the title after initial extraction.
-        Breaks the title into tokens and removes everything from the first metadata token.
+        Uses alphanumeric composition analysis to identify metadata tokens.
+        Enhanced to handle spaced-out season/episode patterns like "s 03 e 20".
         """
         if not title:
             return title
+
+        # Preprocessing: Detect and handle spaced-out season/episode patterns
+        # Convert patterns like "s 03 e 20" to "s03e20" for easier detection
+        title = re.sub(r'\b(s)\s*(\d+)\s*(e)\s*(\d+)\b', r's\2e\4', title, flags=re.IGNORECASE)
+        title = re.sub(r'\b(season)\s*(\d+)\s*(episode)\s*(\d+)\b', r's\2e\4', title, flags=re.IGNORECASE)
+        title = re.sub(r'\b(s)\s*(\d+)\b', r's\2', title, flags=re.IGNORECASE)
+        title = re.sub(r'\b(e)\s*(\d+)\b', r'e\2', title, flags=re.IGNORECASE)
+        title = re.sub(r'\b(ep)\s*(\d+)\b', r'e\2', title, flags=re.IGNORECASE)
 
         # First, replace hyphens with spaces to improve tokenization
         title = title.replace('-', ' ')
@@ -1879,64 +1888,94 @@ class TorrentParser:
         # Split into tokens by spaces and dots
         tokens = re.split(r'[\s.]+', title)
 
-        # Patterns that indicate metadata (to be removed)
-        metadata_patterns = [
-            r'^\d{4}$',  # Year
-            r'^s\d{1,2}$',  # Season indicator (S01, S1)
-            r'^season$', r'^seasons$',  # Season words
-            r'^episode$', r'^episodes$',  # Episode words
-            r'^\d+p$',  # Resolution (720p, 1080p)
-            r'^webdl$', r'^web-dl$',
-            r'^hdr$', r'^hdrip$', r'^dvdrip$', r'^bdrip$',  # Quality terms
-            r'^telu',
-            r'^x264$', r'^x265$', r'^hevc$',  # Codecs
-            r'^aac$', r'^ac3$', r'^ddp$', r'^dts$',  # Audio codecs
-            r'^complete$', r'^uncut$', r'^extended$',  # Edition terms
-            r'^multi$', r'^sub$', r'^subs$', r'^esub$',  # Subtitle terms
-        ]
+        # Keep track of valid title tokens
+        valid_tokens = []
+        pure_alphabetic_found = False
 
-        # Compile patterns
-        compiled_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in metadata_patterns]
-
-        # Words that might indicate a title phrase when followed by potential metadata words
-        title_indicators = {'a', 'an', 'the', 'of', 'in', 'on', 'at', 'for', 'with', 'to', 'and'}
-
-        # Find the first metadata token
-        stop_index = None
-        i = 0
-        while i < len(tokens):
-            token = tokens[i]
-            # Skip empty tokens
+        for token in tokens:
             if not token:
-                i += 1
                 continue
 
-            # Check if token matches any metadata pattern
-            is_metadata = any(pattern.match(token) for pattern in compiled_patterns)
-
-            if is_metadata:
-                # Check if this might be part of the title (e.g., "A Complete Unknown")
-                if i > 0 and tokens[i-1].lower() in title_indicators:
-                    # This might be part of the title, not metadata
-                    i += 1
-                    continue
-                else:
-                    stop_index = i
+            # If we've already found pure alphabetic tokens, be more strict about what we keep
+            if pure_alphabetic_found:
+                # Check if token is likely metadata based on composition
+                if self._is_likely_metadata(token):
+                    # Stop processing further tokens
                     break
-            i += 1
-
-        # If we found a metadata token, keep only the tokens before it
-        if stop_index is not None:
-            tokens = tokens[:stop_index]
+                else:
+                    valid_tokens.append(token)
+            else:
+                # Check if this token is purely alphabetic (likely part of title)
+                if token.isalpha():
+                    pure_alphabetic_found = True
+                    valid_tokens.append(token)
+                else:
+                    # For mixed tokens before finding pure alphabetic, use more permissive rules
+                    if self._is_likely_title_token(token):
+                        valid_tokens.append(token)
+                    else:
+                        # This might be metadata, stop processing
+                        break
 
         # Join the remaining tokens
-        clean_title = ' '.join(tokens)
-
-        # Final cleanup
-        clean_title = re.sub(r'\s+', ' ', clean_title)
-        clean_title = clean_title.strip()
+        clean_title = ' '.join(valid_tokens)
+        clean_title = re.sub(r'\s+', ' ', clean_title).strip()
 
         return clean_title
+
+    def _is_likely_metadata(self, token):
+        """
+        Determines if a token is likely metadata based on its alphanumeric composition.
+        Enhanced to detect single-letter season/episode indicators.
+        """
+        # Skip very short tokens (they might be abbreviations)
+        if len(token) <= 2:
+            # But single letters 's', 'e', etc. are likely metadata indicators
+            if len(token) == 1 and token.lower() in {'s', 'e'}:
+                return True
+            return False
+
+        # Count alphabetic vs numeric characters
+        alpha_count = sum(1 for char in token if char.isalpha())
+        digit_count = sum(1 for char in token if char.isdigit())
+        total_chars = len(token)
+
+        # If it's mostly numeric, it's likely metadata
+        if digit_count > alpha_count:
+            return True
+
+        # If it has a specific pattern that suggests metadata
+        # (e.g., starts with s/e followed by digits, or digits followed by p)
+        if re.match(r'^s\d+', token.lower()) or re.match(r'^e\d+', token.lower()) or re.match(r'^\d+p$', token.lower()):
+            return True
+
+        # If it's a common file format or codec
+        common_metadata = {'x264', 'x265', 'h264', 'h265', 'hevc', 'aac', 'ac3', 'webdl', 'web-dl',
+                        'bluray', 'bdrip', 'dvdrip', 'hdtv', 'hdrip'}
+        if token.lower() in common_metadata:
+            return True
+
+        return False
+
+    def _is_likely_title_token(self, token):
+        """
+        Determines if a token is likely part of the title based on its composition.
+        """
+        # Count alphabetic vs numeric characters
+        alpha_count = sum(1 for char in token if char.isalpha())
+        digit_count = sum(1 for char in token if char.isdigit())
+        total_chars = len(token)
+
+        # If it's mostly alphabetic, it's likely part of the title
+        if alpha_count > digit_count * 2:  # At least twice as many letters as numbers
+            return True
+
+        # If it's a mixed token but starts with a letter, it might be part of the title
+        # (e.g., "Se7en", "2Fast2Furious")
+        if token[0].isalpha() and alpha_count >= digit_count:
+            return True
+
+        return False
 
     def extract_clean_title(self, torrent_name):
         """
@@ -2143,7 +2182,7 @@ if __name__ == "__main__":
 
     test_titles = [
         "Suits (Season 07 Episode 05)(www.kinokopilka.pro)",
-        "www.TamilRockers.ws - Sacred Games (2019) Season 02 - Complete - 1080p TRUE HD - [Hindi + English] - x264 - DDP 5.1 - 11.4GB - MSubs",
+        "shadowhunters.the.mortal.instruments - s03 e 20 1080p.web.h264-tbs.mkv",
         # ... your other test titles
     ]
 
