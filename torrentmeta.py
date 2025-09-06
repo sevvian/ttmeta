@@ -1229,25 +1229,26 @@ class TorrentParser:
         ]
 
     def _compile_filetype_patterns(self) -> List[Tuple[str, re.Pattern]]:
+        """Compile filetype patterns that work with both dotted and non-dotted extensions"""
         return [
-            (".mkv", re.compile(r'\.mkv\b', re.IGNORECASE)),
-            (".mp4", re.compile(r'\.mp4\b', re.IGNORECASE)),
-            (".avi", re.compile(r'\.avi\b', re.IGNORECASE)),
-            (".m4v", re.compile(r'\.m4v\b', re.IGNORECASE)),
-            (".mpg", re.compile(r'\.mpg\b', re.IGNORECASE)),
-            (".mpeg", re.compile(r'\.mpeg\b', re.IGNORECASE)),
-            (".ass", re.compile(r'\.ass\b', re.IGNORECASE)),
-            (".ssa", re.compile(r'\.ssa\b', re.IGNORECASE)),
-            (".srt", re.compile(r'\.srt\b', re.IGNORECASE)),
-            (".sub", re.compile(r'\.sub\b', re.IGNORECASE)),
-            (".idx", re.compile(r'\.idx\b', re.IGNORECASE)),
-            (".iso", re.compile(r'\.iso\b', re.IGNORECASE)),
-            (".ts", re.compile(r'\.ts\b', re.IGNORECASE)),
-            (".m2ts", re.compile(r'\.m2ts\b', re.IGNORECASE)),
-            (".vob", re.compile(r'\.vob\b', re.IGNORECASE)),
-            (".rar", re.compile(r'\.rar\b', re.IGNORECASE)),
-            (".zip", re.compile(r'\.zip\b', re.IGNORECASE)),
-            (".7z", re.compile(r'\.7z\b', re.IGNORECASE)),
+            (".mkv", re.compile(r'(?:\.mkv\b|\bmkv\b)', re.IGNORECASE)),
+            (".mp4", re.compile(r'(?:\.mp4\b|\bmp4\b)', re.IGNORECASE)),
+            (".avi", re.compile(r'(?:\.avi\b|\bavi\b)', re.IGNORECASE)),
+            (".m4v", re.compile(r'(?:\.m4v\b|\bm4v\b)', re.IGNORECASE)),
+            (".mpg", re.compile(r'(?:\.mpg\b|\bmpg\b)', re.IGNORECASE)),
+            (".mpeg", re.compile(r'(?:\.mpeg\b|\bmpeg\b)', re.IGNORECASE)),
+            (".ass", re.compile(r'(?:\.ass\b|\bass\b)', re.IGNORECASE)),
+            (".ssa", re.compile(r'(?:\.ssa\b|\bssa\b)', re.IGNORECASE)),
+            (".srt", re.compile(r'(?:\.srt\b|\bsrt\b)', re.IGNORECASE)),
+            (".sub", re.compile(r'(?:\.sub\b|\bsub\b)', re.IGNORECASE)),
+            (".idx", re.compile(r'(?:\.idx\b|\bidx\b)', re.IGNORECASE)),
+            (".iso", re.compile(r'(?:\.iso\b|\biso\b)', re.IGNORECASE)),
+            (".ts", re.compile(r'(?:\.ts\b|\bts\b)', re.IGNORECASE)),
+            (".m2ts", re.compile(r'(?:\.m2ts\b|\bm2ts\b)', re.IGNORECASE)),
+            (".vob", re.compile(r'(?:\.vob\b|\bvob\b)', re.IGNORECASE)),
+            (".rar", re.compile(r'(?:\.rar\b|\brar\b)', re.IGNORECASE)),
+            (".zip", re.compile(r'(?:\.zip\b|\bzip\b)', re.IGNORECASE)),
+            (".7z", re.compile(r'(?:\.7z\b|\b7z\b)', re.IGNORECASE)),
         ]
 
     def _compile_quality_patterns(self) -> List[Tuple[str, re.Pattern]]:
@@ -1489,9 +1490,8 @@ class TorrentParser:
 
     def parse_filetype(self, title: str) -> Optional[str]:
         """Parse file type from title"""
-        normalized_title = self._normalize_title(title)
         for pattern_name, pattern in self.filetype_patterns:
-            if pattern.search(normalized_title):
+            if pattern.search(title):
                 return pattern_name
         return None
 
@@ -1870,6 +1870,7 @@ class TorrentParser:
         Removes metadata from the title after initial extraction.
         Uses alphanumeric composition analysis to identify metadata tokens.
         Enhanced to handle spaced-out season/episode patterns like "s 03 e 20".
+        Also handles cases where title starts with metadata tokens.
         """
         if not title:
             return title
@@ -1891,37 +1892,128 @@ class TorrentParser:
         # Keep track of valid title tokens
         valid_tokens = []
         pure_alphabetic_found = False
+        found_title_start = False
 
         for token in tokens:
             if not token:
                 continue
 
-            # If we've already found pure alphabetic tokens, be more strict about what we keep
-            if pure_alphabetic_found:
-                # Check if token is likely metadata based on composition
-                if self._is_likely_metadata(token):
-                    # Stop processing further tokens
-                    break
+            # Skip initial metadata tokens until we find the title start
+            if not found_title_start:
+                # Check if this token could be the start of the title
+                if token.isalpha() or self._is_likely_title_token(token):
+                    found_title_start = True
                 else:
-                    valid_tokens.append(token)
-            else:
-                # Check if this token is purely alphabetic (likely part of title)
-                if token.isalpha():
-                    pure_alphabetic_found = True
-                    valid_tokens.append(token)
+                    # This is likely initial metadata, skip it
+                    continue
+
+            # If we've found the title start, process normally
+            if found_title_start:
+                # If we've already found pure alphabetic tokens, be more strict about what we keep
+                if pure_alphabetic_found:
+                    # Check if token is likely metadata based on composition
+                    if self._is_likely_metadata(token):
+                        # Stop processing further tokens
+                        break
+                    else:
+                        valid_tokens.append(token)
                 else:
-                    # For mixed tokens before finding pure alphabetic, use more permissive rules
-                    if self._is_likely_title_token(token):
+                    # Check if this token is purely alphabetic (likely part of title)
+                    if token.isalpha():
+                        pure_alphabetic_found = True
                         valid_tokens.append(token)
                     else:
-                        # This might be metadata, stop processing
-                        break
+                        # For mixed tokens before finding pure alphabetic, use more permissive rules
+                        if self._is_likely_title_token(token):
+                            valid_tokens.append(token)
+                        else:
+                            # This might be metadata, stop processing
+                            break
+
+        # If we didn't find any title content, try a fallback approach
+        if not valid_tokens:
+            # Look for any token that might be part of the title, even if it's not ideal
+            for token in tokens:
+                if token and (token.isalpha() or self._is_likely_title_token(token)):
+                    valid_tokens.append(token)
+                    # Once we find one, be more permissive with subsequent tokens
+                    pure_alphabetic_found = True
+                elif pure_alphabetic_found and token and not self._is_likely_metadata(token):
+                    valid_tokens.append(token)
 
         # Join the remaining tokens
         clean_title = ' '.join(valid_tokens)
         clean_title = re.sub(r'\s+', ' ', clean_title).strip()
 
         return clean_title
+
+    # NEW: Add a method to remove known metadata from parsed results
+    def remove_known_metadata(self, clean_title, parsed_metadata):
+        """
+        Removes metadata tokens that were identified during parsing
+        """
+        if not clean_title or not parsed_metadata:
+            return clean_title
+
+        # Create a list of metadata tokens to remove
+        metadata_tokens = set()
+
+        # Add language codes
+        if parsed_metadata.get('language'):
+            languages = parsed_metadata['language'].split(', ')
+            for lang in languages:
+                metadata_tokens.add(lang.lower())
+
+        # Add file extensions (with null checking)
+        filetype = parsed_metadata.get('filetype')
+        if filetype:
+            if filetype.startswith('.'):
+                metadata_tokens.add(filetype[1:].lower())  # Remove the dot
+            else:
+                metadata_tokens.add(filetype.lower())
+
+        # Add other metadata fields with proper null checking
+        metadata_fields = ['video_codec', 'audio_codec', 'quality', 'encoder', 'group']
+        for field in metadata_fields:
+            value = parsed_metadata.get(field)
+            if value:
+                if isinstance(value, str):
+                    # Split multi-value fields
+                    for token in value.split(', '):
+                        metadata_tokens.add(token.lower())
+
+        # Tokenize the clean title and filter out metadata tokens
+        tokens = clean_title.split()
+        filtered_tokens = []
+
+        for token in tokens:
+            token_lower = token.lower()
+            # Keep the token if it's not in our metadata list
+            if token_lower not in metadata_tokens:
+                filtered_tokens.append(token)
+
+        return ' '.join(filtered_tokens)
+
+    # NEW: Add a method to filter non-English words
+    def filter_non_english_words(self, clean_title):
+        """
+        Filters out non-English words from the title, keeping only English tokens
+        """
+        if not clean_title:
+            return clean_title
+
+        tokens = clean_title.split()
+        english_tokens = []
+
+        for token in tokens:
+            # Simple check for English words (could be enhanced with a dictionary)
+            if re.match(r'^[A-Za-z]+$', token):
+                english_tokens.append(token)
+            # Also keep tokens with apostrophes (like "don't") and hyphens
+            elif re.match(r'^[A-Za-z\'\-]+$', token):
+                english_tokens.append(token)
+
+        return ' '.join(english_tokens)
 
     def _is_likely_metadata(self, token):
         """
@@ -1977,12 +2069,21 @@ class TorrentParser:
 
         return False
 
-    def extract_clean_title(self, torrent_name):
+    def extract_clean_title(self, torrent_name, parsed_metadata=None):
         """
         Main function that extracts the title and then removes metadata
+        Enhanced to use parsed metadata for additional cleaning
         """
         title = self.extract_title(torrent_name)
         clean_title = self.remove_metadata(title)
+
+        # NEW: Use parsed metadata to remove additional known metadata tokens
+        if parsed_metadata:
+            clean_title = self.remove_known_metadata(clean_title, parsed_metadata)
+
+            # NEW: Filter non-English words as a final pass
+            clean_title = self.filter_non_english_words(clean_title)
+
         return clean_title
 
     # Update the parse method to include content type detection
@@ -1994,14 +2095,8 @@ class TorrentParser:
         normalized_title = self._normalize_title(title)
         content_type = self._detect_content_type(title, normalized_title)
 
-            # Add cleaned title extraction
-        cleaned_title = self.extract_clean_title(title)
-
-        result = {
-            "original_title": title,
-            "normalized_title": normalized_title,
-            "cleaned_title": cleaned_title,
-            "content_type": content_type,
+        # Parse metadata first
+        parsed_data = {
             "season": self.parse_season(title),
             "episode": self.parse_episode(title),
             "resolution": self.parse_resolution(title),
@@ -2018,13 +2113,23 @@ class TorrentParser:
             "anime_info": self.parse_anime_info(title),
         }
 
+        # Add cleaned title extraction with parsed metadata
+        cleaned_title = self.extract_clean_title(title, parsed_data)
+
+        result = {
+            "original_title": title,
+            "normalized_title": normalized_title,
+            "cleaned_title": cleaned_title,
+            "content_type": content_type,
+        }
+
+        # Add parsed metadata to result
+        result.update({k: v for k, v in parsed_data.items() if v is not None})
+
         # If content is movie, remove season and episode
         if content_type == "movie":
             result.pop("season", None)
             result.pop("episode", None)
-
-        # Clean up None values
-        result = {k: v for k, v in result.items() if v is not None}
 
         return result
 
@@ -2181,9 +2286,71 @@ if __name__ == "__main__":
     parser = TorrentParser()
 
     test_titles = [
+        "s1e27 - Of Ice and aviation Men - Ледниковый период.rus",
+        "The Mary Tyler Moore Show (S1-S4) 1080p (moviesbyrizzo upl)",
+        "www.1TamilMV.su - Black Doves (2024) S01 EP (01-06) - 1080p - HQ HDRip - [Tam + Tel + Hin + Eng] - (DD+5.1 - 192Kbps) - 3.8GB - ESub",
+         "s1e27 - Of Ice and aviation Men - Ледниковый период.rus",
+        "www.1TamilMV.su - Black Doves (2024) S01 EP (01-06) - 1080p - HQ HDRip - [Tam + Tel + Hin + Eng] - (DD+5.1 - 192Kbps) - 3.8GB - ESub",
+        "The Mary Tyler Moore Show (S1-S4) 1080p (moviesbyrizzo upl)",
+        "shadowhunters.the.mortal.instruments.s03e20.1080p.web.h264-tbs.mkv",
+        "My.Hero.Academia.S04E25.1080p.WEB.h264.mkv",
+        "The.Mandalorian.S02E01.720p.WEB-DL.x265.HEVC-PSA",
         "Suits (Season 07 Episode 05)(www.kinokopilka.pro)",
-        "shadowhunters.the.mortal.instruments - s03 e 20 1080p.web.h264-tbs.mkv",
-        # ... your other test titles
+        "Senke nad Balkanom (2017) (S01.ep 7.8-10) 1080p",
+        "[AnimeRG] One Piece (Season 19) Whole Cake Island (Episodes 783-891) [1080p]",
+        "Ultimate Spider-Man vs the Sinister 6 [Season 4](Episodes 17 - 21)(WebRip-H264-AAC){Shon}[WWRG]",
+        "Dhanbad Blues (2018) (Season 1 All Episodes - Ep 01-09) [720p WEB-DL x264]",
+        "Suits (Season 07 Episode 05)(www.kinokopilka.pro)",
+"Suits (Season 07 Episode 08)(www.kinokopilka.pro)",
+"Senke nad Balkanom (2017) (S01.ep 7.8-10) 1080p",
+"Mr. Robot [WEB-DL-1080p] (Season 03 Episode 03) (www.kinokopilka.pro)",
+"Game Of Thrones (Season 06 Episode 06)(www.kinokopilka.pro)",
+"Elementary (Season 06 Episodes 03-04)(www.kinokopilka.pro)",
+"Borcy.za.svobodu.Luch (S1-2_EP1-12) (2017-2018)WEB-DLRip",
+"Justin T & Rihanna @ Alan Carr. Chatty Man. 27Sep2013 (S11E05. 100th episode Special)",
+"Senke nad Balkanom (2017) (S01.ep 9.10-10) 1080p",
+"Goldrake.U(S01 EP 09-13)[1080P H264 ITA AAC JP AAC WEBDL RAI NotSmirco]",
+"Borgen (Danish TV Series) (Complete) (S1-3) (2010-2013) 1080p H.264 (moviesbyrizzo) engsubs",
+"Supernatural (S10)(2014)(WebDl)(FHD)(1080p)(AVC)(Multi 6 lang)(MultiSUB) PHDTeam",
+"The Simpsons (S16)(2004)(Complete)(HD)(720p)(WebDl)(x264)(AAC 2.0-Multi 8 lang)(MultiSub) PHDTeam",
+"The Simpsons (S16)(2004)(Complete)(HD)(720p)(WebDl)(x264)(AAC 2.0-Multi 8 lang)(MultiSub) PHDTeam",
+"Harry Potter 1. (Y la piedra filosofal).(2001).(HDRip.Esp)",
+"Black Bullet (Season 1) (BD 1080p)(HEVC x265 10bit)(Dual-Audio)(Eng-Subs)-Judas[TGx]",
+"The Simpsons (S07)(1995)(Complete)(HD)(720p)(WebDl)(x264)(AAC 2.0-Multi 8 lang)(MultiSub) PHDTeam",
+"Kyokou Suiri (In-Spectre) (Season 1) (1080p)(HEVC x265 10bit)(Multi-Subs)-Judas[TGx]",
+"Ghosts (US) (2021) Season 3 S03 (1080p AMZN WEB-DL x265 HEVC 10bit EAC3 5.1 Silence)",
+"Outer Range (S01E01)(2022)(FHD)(1080p)(x264)(WebDL)(Multi 9 Lang)(MultiSUB) PHDTeam",
+"The Simpsons (S14)(2002)(Complete)(HD)(720p)(WebDl)(x264)(AAC 2.0-Multi 8 lang)(MultiSub) PHDTeam",
+"The Expanse (S03)(2018)(Hevc)(1080p)(WebDL)(14 lang AAC- 2.0) PHDTeam",
+"Greatness Code (2020) S01 Season 1 (DOCU)(1080p 4KWEBRip x265 HEVC E-AC3-AAC 5.1)[Cømpact-cTurtle]",
+"[Judas] Saikyou no Shienshoku Wajutsushi de Aru Ore wa Sekai Saikyou Clan wo Shitagaeru (Season 1) (Season 01) [1080p][HEVC x265 10bit][Multi-Subs]",
+"Invincible (S02E03)(2023)(Hevc)(1080p)(WebDL)(28 lang EAC3 5.1)(MultiSUB) PHDTeam",
+"Агасси - Куэртен (1-2 Los Angeles - 2001); Агасси - Сампрас (финал Los Angeles - 2001)",
+"Trashopolis (11 episodes) (2010-2011) SATRip [Hurtom]",
+"Dhanbad Blues (2018) (Season 1 All Episodes - Ep 01-09) [720p WEB-DL x264] [Bengali AAC] (Suryadipta1)",
+"[AnimeRG] One Piece (Season 19) Whole Cake Island (Episodes 783-891) [1080p] [Multi-Sub] [HEVC] [x265] [pseudo]",
+"Ultimate Spider-Man vs the Sinister 6 [Season 4](Episodes 17 - 21)(WebRip-H264-AAC){Shon}[WWRG]",
+"Endless.Night.S01.COMPLETE.FRENCH.720p.NF.WEBRip.x264-GalaxyTV[TGx]",
+"Whiskey.Cavalier.S01.COMPLETE.720p.AMZN.WEBRip.x264-GalaxyTV[TGx]",
+"Centennial 1978 Season 1 Complete TVRip x264 [i_c]",
+"A Complete Unknown (Un completo desconocido) (2024) sub.mp4",
+"Guardian.2018.Complete.4K.WEB-DL.H265.AAC-TJUPT",
+"Southland (2009) Complete Series Uncensored + Bonus Features DVD Rip 1080p AI Uspcaled",
+"Tekwar The Series 1994 Season 1 Complete DVDRip x264 [i_c]",
+"Naked and Afraid Season 8 Complete 720p HDTV x264 [i_c]",
+"Griselda.S01.COMPLETE.1080p.ENG.ITA.HINDI.LATINO.Multi.Sub.DDP5.1.Atmos.MKV-BEN.THE.MEN",
+"[OCN] Doctor.Frost.2014.COMPLETE.720p.HDTV.x264.Film.iVTC.AAC-SODiHD",
+"www.TamilRockers.to - Apharan (2018) Hind - Season 1 Complete - 720p HDRip x264 - 2GB.mkv",
+"www.TamilMv.tax - Naga Chaitanya - Telugu Complete Collections (2009 - 2017) - 13 Movies [ 720p - HDRip - x264 - 16GB ]",
+"www.TamilRockers.ws - Sacred Games (2019) Season 02 - Complete - 1080p TRUE HD - [Hindi + English] - x264 - DDP 5.1 - 11.4GB - MSubs",
+"www.TamilRockers.to - Selection Day Season 1 Complete  (2018) Hindi 1080p HD AVC [Hindi + Eng] - x264 6GB ESubs(Multi)",
+"www.TamilMv.tax - Nani Telugu Complete Collections (2008 - 2017) - 20 Movies [ 720p - HDRip - x264 - 27GB ]",
+"www.TamilRockers.mu - Karenjit Kaur (2018) Complete Season 2 [1080p HD AVC - [Tamil + Hindi + Malayalam] - x264 - 3GB - ESubs]",
+"www.TamilRockers.mu - Karenjit Kaur (2018) Complete Season 2 [HDRip - [Tamil + Hindi + Malayalam] - x264 - 450MB - ESubs].mkv",
+"www.TamilRockers.by - The Haunting of Hill House  (2018) [English - Season 1 - Complete (EP 01 - 10) - 720p HDRip - x264 - 5.1 - ESubs - 3.3GB]",
+"www.TamilRockers.by - The Haunting of Hill House  (2018) [English - Season 1 - Complete (EP 01 - 10) - 1080p HDRip - x264 - AC3 5.1 - ESubs - 6.1GB]",
+"TamilVaathi.online - Money Heist (2017) Season 01 Complete 720p HDRip x265 AAC Spanish+ English 3.3GB Esub",
+
     ]
 
     # Parse single title
