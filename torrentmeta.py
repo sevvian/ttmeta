@@ -123,7 +123,16 @@ class TorrentParser:
 
     # Add this method to the TorrentParser class
     def _detect_content_type(self, title: str, normalized_title: str) -> str:
-        """Detect if content is a movie or series based on patterns"""
+        """Detect if content is a movie or series based on parsed season/episode data"""
+        # First, try to parse season and episode information
+        season = self.parse_season(title)
+        episode = self.parse_episode(title)
+
+        # If we found either season or episode information, it's likely a series
+        if season is not None or episode is not None:
+            return "series"
+
+        # Fallback to keyword detection only if season/episode parsing fails
         # Check for movie indicators
         movie_indicators = [
             r'\bmovie\b', r'\bfilm\b', r'\bfeature\b', r'\bcollections?\b',
@@ -146,8 +155,8 @@ class TorrentParser:
             if re.search(pattern, normalized_title, re.IGNORECASE):
                 return "series"
 
-        # Default to series if we can't determine (preserve existing behavior)
-        return "series"
+        # Default to movie if we can't determine (changed from series)
+        return "movie"
 
 
 
@@ -2286,70 +2295,7 @@ if __name__ == "__main__":
     parser = TorrentParser()
 
     test_titles = [
-        "s1e27 - Of Ice and aviation Men - Ледниковый период.rus",
-        "The Mary Tyler Moore Show (S1-S4) 1080p (moviesbyrizzo upl)",
-        "www.1TamilMV.su - Black Doves (2024) S01 EP (01-06) - 1080p - HQ HDRip - [Tam + Tel + Hin + Eng] - (DD+5.1 - 192Kbps) - 3.8GB - ESub",
-         "s1e27 - Of Ice and aviation Men - Ледниковый период.rus",
-        "www.1TamilMV.su - Black Doves (2024) S01 EP (01-06) - 1080p - HQ HDRip - [Tam + Tel + Hin + Eng] - (DD+5.1 - 192Kbps) - 3.8GB - ESub",
-        "The Mary Tyler Moore Show (S1-S4) 1080p (moviesbyrizzo upl)",
-        "shadowhunters.the.mortal.instruments.s03e20.1080p.web.h264-tbs.mkv",
-        "My.Hero.Academia.S04E25.1080p.WEB.h264.mkv",
-        "The.Mandalorian.S02E01.720p.WEB-DL.x265.HEVC-PSA",
-        "Suits (Season 07 Episode 05)(www.kinokopilka.pro)",
-        "Senke nad Balkanom (2017) (S01.ep 7.8-10) 1080p",
-        "[AnimeRG] One Piece (Season 19) Whole Cake Island (Episodes 783-891) [1080p]",
-        "Ultimate Spider-Man vs the Sinister 6 [Season 4](Episodes 17 - 21)(WebRip-H264-AAC){Shon}[WWRG]",
-        "Dhanbad Blues (2018) (Season 1 All Episodes - Ep 01-09) [720p WEB-DL x264]",
-        "Suits (Season 07 Episode 05)(www.kinokopilka.pro)",
-"Suits (Season 07 Episode 08)(www.kinokopilka.pro)",
-"Senke nad Balkanom (2017) (S01.ep 7.8-10) 1080p",
-"Mr. Robot [WEB-DL-1080p] (Season 03 Episode 03) (www.kinokopilka.pro)",
-"Game Of Thrones (Season 06 Episode 06)(www.kinokopilka.pro)",
-"Elementary (Season 06 Episodes 03-04)(www.kinokopilka.pro)",
-"Borcy.za.svobodu.Luch (S1-2_EP1-12) (2017-2018)WEB-DLRip",
-"Justin T & Rihanna @ Alan Carr. Chatty Man. 27Sep2013 (S11E05. 100th episode Special)",
-"Senke nad Balkanom (2017) (S01.ep 9.10-10) 1080p",
-"Goldrake.U(S01 EP 09-13)[1080P H264 ITA AAC JP AAC WEBDL RAI NotSmirco]",
-"Borgen (Danish TV Series) (Complete) (S1-3) (2010-2013) 1080p H.264 (moviesbyrizzo) engsubs",
-"Supernatural (S10)(2014)(WebDl)(FHD)(1080p)(AVC)(Multi 6 lang)(MultiSUB) PHDTeam",
-"The Simpsons (S16)(2004)(Complete)(HD)(720p)(WebDl)(x264)(AAC 2.0-Multi 8 lang)(MultiSub) PHDTeam",
-"The Simpsons (S16)(2004)(Complete)(HD)(720p)(WebDl)(x264)(AAC 2.0-Multi 8 lang)(MultiSub) PHDTeam",
-"Harry Potter 1. (Y la piedra filosofal).(2001).(HDRip.Esp)",
-"Black Bullet (Season 1) (BD 1080p)(HEVC x265 10bit)(Dual-Audio)(Eng-Subs)-Judas[TGx]",
-"The Simpsons (S07)(1995)(Complete)(HD)(720p)(WebDl)(x264)(AAC 2.0-Multi 8 lang)(MultiSub) PHDTeam",
-"Kyokou Suiri (In-Spectre) (Season 1) (1080p)(HEVC x265 10bit)(Multi-Subs)-Judas[TGx]",
-"Ghosts (US) (2021) Season 3 S03 (1080p AMZN WEB-DL x265 HEVC 10bit EAC3 5.1 Silence)",
-"Outer Range (S01E01)(2022)(FHD)(1080p)(x264)(WebDL)(Multi 9 Lang)(MultiSUB) PHDTeam",
-"The Simpsons (S14)(2002)(Complete)(HD)(720p)(WebDl)(x264)(AAC 2.0-Multi 8 lang)(MultiSub) PHDTeam",
-"The Expanse (S03)(2018)(Hevc)(1080p)(WebDL)(14 lang AAC- 2.0) PHDTeam",
-"Greatness Code (2020) S01 Season 1 (DOCU)(1080p 4KWEBRip x265 HEVC E-AC3-AAC 5.1)[Cømpact-cTurtle]",
-"[Judas] Saikyou no Shienshoku Wajutsushi de Aru Ore wa Sekai Saikyou Clan wo Shitagaeru (Season 1) (Season 01) [1080p][HEVC x265 10bit][Multi-Subs]",
-"Invincible (S02E03)(2023)(Hevc)(1080p)(WebDL)(28 lang EAC3 5.1)(MultiSUB) PHDTeam",
-"Агасси - Куэртен (1-2 Los Angeles - 2001); Агасси - Сампрас (финал Los Angeles - 2001)",
-"Trashopolis (11 episodes) (2010-2011) SATRip [Hurtom]",
-"Dhanbad Blues (2018) (Season 1 All Episodes - Ep 01-09) [720p WEB-DL x264] [Bengali AAC] (Suryadipta1)",
-"[AnimeRG] One Piece (Season 19) Whole Cake Island (Episodes 783-891) [1080p] [Multi-Sub] [HEVC] [x265] [pseudo]",
-"Ultimate Spider-Man vs the Sinister 6 [Season 4](Episodes 17 - 21)(WebRip-H264-AAC){Shon}[WWRG]",
-"Endless.Night.S01.COMPLETE.FRENCH.720p.NF.WEBRip.x264-GalaxyTV[TGx]",
-"Whiskey.Cavalier.S01.COMPLETE.720p.AMZN.WEBRip.x264-GalaxyTV[TGx]",
-"Centennial 1978 Season 1 Complete TVRip x264 [i_c]",
-"A Complete Unknown (Un completo desconocido) (2024) sub.mp4",
-"Guardian.2018.Complete.4K.WEB-DL.H265.AAC-TJUPT",
-"Southland (2009) Complete Series Uncensored + Bonus Features DVD Rip 1080p AI Uspcaled",
-"Tekwar The Series 1994 Season 1 Complete DVDRip x264 [i_c]",
-"Naked and Afraid Season 8 Complete 720p HDTV x264 [i_c]",
-"Griselda.S01.COMPLETE.1080p.ENG.ITA.HINDI.LATINO.Multi.Sub.DDP5.1.Atmos.MKV-BEN.THE.MEN",
-"[OCN] Doctor.Frost.2014.COMPLETE.720p.HDTV.x264.Film.iVTC.AAC-SODiHD",
-"www.TamilRockers.to - Apharan (2018) Hind - Season 1 Complete - 720p HDRip x264 - 2GB.mkv",
-"www.TamilMv.tax - Naga Chaitanya - Telugu Complete Collections (2009 - 2017) - 13 Movies [ 720p - HDRip - x264 - 16GB ]",
-"www.TamilRockers.ws - Sacred Games (2019) Season 02 - Complete - 1080p TRUE HD - [Hindi + English] - x264 - DDP 5.1 - 11.4GB - MSubs",
-"www.TamilRockers.to - Selection Day Season 1 Complete  (2018) Hindi 1080p HD AVC [Hindi + Eng] - x264 6GB ESubs(Multi)",
-"www.TamilMv.tax - Nani Telugu Complete Collections (2008 - 2017) - 20 Movies [ 720p - HDRip - x264 - 27GB ]",
-"www.TamilRockers.mu - Karenjit Kaur (2018) Complete Season 2 [1080p HD AVC - [Tamil + Hindi + Malayalam] - x264 - 3GB - ESubs]",
-"www.TamilRockers.mu - Karenjit Kaur (2018) Complete Season 2 [HDRip - [Tamil + Hindi + Malayalam] - x264 - 450MB - ESubs].mkv",
-"www.TamilRockers.by - The Haunting of Hill House  (2018) [English - Season 1 - Complete (EP 01 - 10) - 720p HDRip - x264 - 5.1 - ESubs - 3.3GB]",
-"www.TamilRockers.by - The Haunting of Hill House  (2018) [English - Season 1 - Complete (EP 01 - 10) - 1080p HDRip - x264 - AC3 5.1 - ESubs - 6.1GB]",
-"TamilVaathi.online - Money Heist (2017) Season 01 Complete 720p HDRip x265 AAC Spanish+ English 3.3GB Esub",
+        "Die.göttliche.Ordnung.2017.WEBRip.720p.H264.AAC.SUB[UKR]-Hurtom.mp4"
 
     ]
 
