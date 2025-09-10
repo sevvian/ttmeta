@@ -79,7 +79,7 @@ def categorize_tokens(tokens):
     QUALITIES = {q.lower() for q in {
         'CAM','CAMRip','TS','TELESYNC','TC','SCR','DVDScr','R5','PDVD',
         'DVDRip','DVD','DVD5','DVD9','HDRip','HDCAM','HDTS',
-        'WEB-DL','WEBDL','WEB_DL','WEBRip','WEB','WEBRIP','TVRip'
+        'WEB-DL','WEBDL','WEB_DL','WEBRip','WEB','WEBRIP','TVRip','HDTVrip',
         'BDRip','BRRip','BluRay','Blu-ray','BD25','BD50','BD',
         'Remux','REMUX','Remux','PROPER','REPACK',
         'LIMITED','UNRATED','EXTENDED','INTERNAL','SCREENER','WORKPRINT','WP'
@@ -111,7 +111,7 @@ def categorize_tokens(tokens):
         # Global
         'ENG','English','SPA','Spanish','FRE','French','FRENCH',
         'ITA','Italian','DEU','German','GER','PT','Portuguese','RUS','Russian',
-        'JP','JPN','Japanese','KOR','Korean','CHN','Chinese','AR','Arabic',
+        'JP','JPN','Japanese','KOR','Korean','CHN','Chinese','AR','Arabic','Chi','Jap',
 
         # Major Indian languages
         'HIN','Hindi','TAM','Tamil','TEL','Telugu','MAL','Malayalam','KAN','Kannada',
@@ -134,7 +134,7 @@ def categorize_tokens(tokens):
     }}
 
     SEASON_INDICATORS = {s.lower() for s in {'season','seasons','s','S','Series','SERIES'}}
-    EPISODE_INDICATORS = {e.lower() for e in {'episode','episodes','ep','eps','e','E','Part','Chapter','pt','Pt','ch'}}
+    EPISODE_INDICATORS = {e.lower() for e in {'episode','episodes','ep','eps','e','E','EP','Ep','Part','Chapter','pt','Pt','ch'}}
 
     COMPLETE_INDICATORS = {c.lower() for c in {
         'complete', 'COMPLETE', 'full', 'full season', 'season pack',
@@ -278,6 +278,7 @@ def categorize_tokens(tokens):
             metadata_map[i] = ('language', token)
 
     # Third pass: Season and episode detection with context awareness
+    # Third pass: Season and episode detection with context awareness
     i = 0
     while i < n:
         if i in metadata_map:
@@ -305,9 +306,11 @@ def categorize_tokens(tokens):
             i += 1
             continue
 
-        # Episode patterns
-        if (lower_token.startswith('e') and len(token) > 1 and
-            (token[1:].isdigit() or ('.' in token[1:] and token[1:].split('.')[0].isdigit()))):
+        # Episode patterns - enhanced to handle "Ep" pattern
+        if ((lower_token.startswith('e') and len(token) > 1 and
+            (token[1:].isdigit() or ('.' in token[1:] and token[1:].split('.')[0].isdigit()))) or
+            (lower_token.startswith('ep') and len(token) > 2 and
+            (token[2:].isdigit() or ('.' in token[2:] and token[2:].split('.')[0].isdigit())))):
             metadata_map[i] = ('episode', token)
             i += 1
             continue
@@ -579,56 +582,14 @@ def categorize_tokens(tokens):
 
 if __name__ == '__main__':
     test_cases = [
-        "[Judas] Saikyou no Shienshoku Wajutsushi de Aru Ore wa Sekai Saikyou Clan wo Shitagaeru (Season 1) (Season 01) [1080p][HEVC x265 10bit][Multi-Subs]",
-        "Suits (Season 07 Episode 05)(www.kinokopilka.pro)",
-        "Suits (Season 07 Episode 08)(www.kinokopilka.pro)",
-        "Senke nad Balkanom (2017) (S01.ep 7.8-10) 1080p",
-        "Mr. Robot [WEB-DL-1080p] (Season 03 Episode 03) (www.kinokopilka.pro)",
-        "Game Of Thrones (Season 06 Episode 06)(www.kinokopilka.pro)",
-        "Elementary (Season 06 Episodes 03-04)(www.kinokopilka.pro)",
-        "Borcy.za.svobodu.Luch (S1-2_EP1-12) (2017-2018)WEB-DLRip",
-        "Justin T & Rihanna @ Alan Carr. Chatty Man. 27Sep2013 (S11E05. 100th episode Special)",
-        "Senke nad Balkanom (2017) (S01.ep 9.10-10) 1080p",
-        "Goldrake.U(S01 EP 09-13)[1080P H264 ITA AAC JP AAC WEBDL RAI NotSmirco]",
-        "Borgen (Danish TV Series) (Complete) (S1-3) (2010-2013) 1080p H.264 (moviesbyrizzo) engsubs",
-        "Supernatural (S10)(2014)(WebDl)(FHD)(1080p)(AVC)(Multi 6 lang)(MultiSUB) PHDTeam",
-        "The Simpsons (S16)(2004)(Complete)(HD)(720p)(WebDl)(x264)(AAC 2.0-Multi 8 lang)(MultiSub) PHDTeam",
-        "Harry Potter 1. (Y la piedra filosofal).(2001).(HDRip.Esp)",
-        "Black Bullet (Season 1) (BD 1080p)(HEVC x265 10bit)(Dual-Audio)(Eng-Subs)-Judas[TGx]",
-        "The Simpsons (S07)(1995)(Complete)(HD)(720p)(WebDl)(x264)(AAC 2.0-Multi 8 lang)(MultiSub) PHDTeam",
-        "Kyokou Suiri (In-Spectre) (Season 1) (1080p)(HEVC x265 10bit)(Multi-Subs)-Judas[TGx]",
-        "Ghosts (US) (2021) Season 3 S03 (1080p AMZN WEB-DL x265 HEVC 10bit EAC3 5.1 Silence)",
-        "Outer Range (S01E01)(2022)(FHD)(1080p)(x264)(WebDL)(Multi 9 Lang)(MultiSUB) PHDTeam",
-        "The Simpsons (S14)(2002)(Complete)(HD)(720p)(WebDl)(x264)(AAC 2.0-Multi 8 lang)(MultiSub) PHDTeam",
-        "The Expanse (S03)(2018)(Hevc)(1080p)(WebDL)(14 lang AAC- 2.0) PHDTeam",
-        "Greatness Code (2020) S01 Season 1 (DOCU)(1080p 4KWEBRip x265 HEVC E-AC3-AAC 5.1)[Cømpact-cTurtle]",
-        "Invincible (S02E03)(2023)(Hevc)(1080p)(WebDL)(28 lang EAC3 5.1)(MultiSUB) PHDTeam",
-        "Агасси - Куэртен (1-2 Los Angeles - 2001); Агасси - Сампрас (финал Los Angeles - 2001)",
-        "Trashopolis (11 episodes) (2010-2011) SATRip [Hurtom]",
-        "Dhanbad Blues (2018) (Season 1 All Episodes - Ep 01-09) [720p WEB-DL x264] [Bengali AAC] (Suryadipta1)",
-        "[AnimeRG] One Piece (Season 19) Whole Cake Island (Episodes 783-891) [1080p] [Multi-Sub] [HEVC] [x265] [pseudo]",
-        "Ultimate Spider-Man vs the Sinister 6 [Season 4](Episodes 17 - 21)(WebRip-H264-AAC){Shon}[WWRG]",
-        "Endless.Night.S01.COMPLETE.FRENCH.720p.NF.WEBRip.x264-GalaxyTV[TGx]",
-        "Whiskey.Cavalier.S01.COMPLETE.720p.AMZN.WEBRip.x264-GalaxyTV[TGx]",
-        "Centennial 1978 Season 1 Complete TVRip x264 [i_c]",
-        "A Complete Unknown (Un completo desconocido) (2024) sub.mp4",
-        "Guardian.2018.Complete.4K.WEB-DL.H265.AAC-TJUPT",
-        "Southland (2009) Complete Series Uncensored + Bonus Features DVD Rip 1080p AI Uspcaled",
-        "Tekwar The Series 1994 Season 1 Complete DVDRip x264 [i_c]",
-        "Naked and Afraid Season 8 Complete 720p HDTV x264 [i_c]",
-        "Griselda.S01.COMPLETE.1080p.ENG.ITA.HINDI.LATINO.Multi.Sub.DDP5.1.Atmos.MKV-BEN.THE.MEN",
-        "[OCN] Doctor.Frost.2014.COMPLETE.720p.HDTV.x264.Film.iVTC.AAC-SODiHD",
-        "www.TamilRockers.to - Apharan (2018) Hind - Season 1 Complete - 720p HDRip x264 - 2GB.mkv",
-        "www.TamilMv.tax - Naga Chaitanya - Telugu Complete Collections (2009 - 2017) - 13 Movies [ 720p - HDRip - x264 - 16GB ]",
-        "www.TamilRockers.ws - Sacred Games (2019) Season 02 - Complete - 1080p TRUE HD - [Hindi + English] - x264 - DDP 5.1 - 11.4GB - MSubs",
-        "www.TamilRockers.to - Selection Day Season 1 Complete  (2018) Hindi 1080p HD AVC [Hindi + Eng] - x264 6GB ESubs(Multi)",
-        "www.TamilMv.tax - Nani Telugu Complete Collections (2008 - 2017) - 20 Movies [ 720p - HDRip - x264 - 27GB ]",
-        "www.TamilRockers.mu - Karenjit Kaur (2018) Complete Season 2 [1080p HD AVC - [Tamil + Hindi + Malayalam] - x264 - 3GB - ESubs]",
-        "www.TamilRockers.mu - Karenjit Kaur (2018) Complete Season 2 [HDRip - [Tamil + Hindi + Malayalam] - x264 - 450MB - ESubs].mkv",
-        "www.TamilRockers.by - The Haunting of Hill House  (2018) [English - Season 1 - Complete (EP 01 - 10) - 720p HDRip - x264 - 5.1 - ESubs - 3.3GB]",
-        "www.TamilRockers.by - The Haunting of Hill House  (2018) [English - Season 1 - Complete (EP 01 - 10) - 1080p HDRip - x264 - AC3 5.1 - ESubs - 6.1GB]",
-        "TamilVaathi.online - Money Heist (2017) Season 01 Complete 720p HDRip x265 AAC Spanish+ English 3.3GB Esub",
-        "Below.Deck.Mediterranean.S04E13.Its.Ben.a.Long.Time.720p.HDTV.x264-CRiMSON[eztv].mkv"
+        "6 Honningfellen (2009)/honningfellen III.mkv",
+        "消除老师的方程式。.Sensei.wo.Kesu.Houteishiki.Ep05.Chi_Jap.HDTVrip.1280X720-ZhuixinFan.mp4",
+        "5. Виза невесты. Виза жениха. Знакомство s05_e14.mp4",
+        " Невинные чародеи.1960.BDRip-AVC msltel.mkv",
+        "Незрелый человек.1956.BDRip AVC msltel.mkv"
+
+
+
     ]
 
     for filename in test_cases:
